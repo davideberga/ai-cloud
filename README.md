@@ -68,16 +68,52 @@ This is calculated using similarity between unconnected nodes, which is a non-tr
 ### What the Mapper and Reducer Do
 MRAttractor is divided into three main phases, each implemented using MapReduce.   
 These are the three MapReduce stages:  
-1. *MR1 – Star Graph Generation*: Builds the local structure of each node (Γ(u)) to enable the computation of interactions.  
-2. *MR2 – Dynamic Interaction Computation*: computes DI, CI, and EI for each primary edge within the subgraphs G₍ᵢⱼₖ₎.  
-3. *MR3 – Distance Update + Sliding Window*: updates the distance d(u,v) for each edge and determines whether it has converged.  
+1. *MR1 – Star Graph Generation*:  
+**Goal**: Builds the local structure of each node (Γ(u)) to enable the computation of interactions.  
+- **Mapper**:  
+For each edge (u, v), it emits:  
+⟨u; (v, d(u,v))⟩  
+⟨v; (u, d(u,v))⟩  
+This is used to build the star view around each node.  
+- **Reducer**:  
+It groups all the information about node u: its neighbors and their distances.  
+Then it sorts the neighbors by ID → producing the “star graph” Γ(u) = {(v, d(u,v))}
+
+2. *MR2 – Dynamic Interaction Computation*:  
+**Goal**: computes DI, CI, and EI for each primary edge within the subgraphs G₍ᵢⱼₖ₎.  
+- **Mapper**:  
+For each Γ(u), it determines which subgraphs G<sub>ijk</sub> it should be used in.  
+It emits ⟨(i,j,k); (u, Γ(u))⟩ → a copy of u’s star is sent to each relevant subgraph.  
+- **Reducer**:  
+It receives all Γ(u) for a given (i,j,k), which represents the local subgraph.  
+It identifies the main edges, and for each one:    
+  - Computes DI (direct interaction).   
+  - Computes CI (common interaction).   
+  - Computes EI (exclusive interaction, including rear edges).  
+It emits ⟨(u,v); SI⟩ for each edge, where SI = DI + CI + EI  
+3. *MR3 – Distance Update + Sliding Window*:  
+**Goal**: updates the distance d(u,v) for each edge and determines whether it has converged.  
+- **Mapper**:  
+For each edge (u, v):  
+It reads and emits:  
+  - the previous distance d(u, v). 
+  - the SI value computed in Phase 2. 
+  - the sliding window vector w. 
+- **Reducer**:  
+It receives all the data related to the edge (u, v). 
+It computes:  
+  - the new distance: d(u, v) ← d(u, v) − SI. 
+  - the updated sliding window vector w. 
+  - If the trend clearly indicates convergence (many +1s or −1s), it forces the distance to 1 or 0.   
+It emits the new values of d(u, v) and w for the next iteration
 
 **Master Node (after MapReduce)**  
 When the number of non-converged edges falls below a threshold γ, MRAttractor shifts the processing to the master node for more efficient final convergence.
 
-### Number of Iterations  
-The number of iterations depends on the dataset:  
-• *YouTube*: 22 iterations  
-• *Flixster*: 25 iterations  
-• *Amazon*: 18 iterations  
-• *DBLP*: ?  
+## Python version  
+- main_mrattractor/MasterMR.py is the starting point of MRAttractor.
+- To run MasterMR.py you should provide it arguments in following format:  
+```  
+python main_mrattractor/MasterMR.py testgraphs/karate.txt MrAttractor -1 0.6 -1 0 100 -1 34 20 0.7 5000 15000000 78 5 5 0
+```
+
