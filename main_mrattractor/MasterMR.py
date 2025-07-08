@@ -6,6 +6,7 @@ from collections import deque
 from typing import List, Tuple, Optional
 import subprocess
 from pyspark.sql import SparkSession
+from pyspark import SparkContext
 import time, os
 
 # Assumendo che questi moduli siano già implementati
@@ -47,7 +48,6 @@ class MasterMR:
         self.time_computing_dynamic_interactions = 0.0
         self.time_updating_edges = 0.0
         self.time_running_on_single_machine = 0.0
-        self.spark = SparkSession.builder.appName("MrAttractor").getOrCreate()
     
     class Bucket:
         """Classe per gestire i bucket nel bilanciamento del carico"""
@@ -408,14 +408,11 @@ class MasterMR:
               no_partition_dynamic_interaction):
         """Metodo principale del master"""
         
-        # Inizializza filesystem (simulato)
-        #hdfs = MyUtil.get_hdfs(self.spark)
         local_filesystem = "local"
         
         if self.DELETE_STALE_INFO:
             MyUtil.delete_path(outfolder)
 
-        
         tic = time.time()
         
         a = graphfile.split("/")
@@ -433,7 +430,9 @@ class MasterMR:
         curr_edge_folder = f"{out_distance_init}/edges"
         
         # Inizializzazione distanza
-        MyUtil.mkdirs(curr_edge_folder)
+        if not os.path.exists(curr_edge_folder):
+            os.makedirs(curr_edge_folder)
+            
         MyUtil.compute_jaccard_distance_single_machine(
             graphfile,
             f"{curr_edge_folder}/binary_graph_file_initialized", 

@@ -6,3 +6,9 @@ __pycache__/
 .vscode/
 venv/
 .env/
+MrAttractor/
+*.txt
+*.log
+!requirements.txt
+ours/
+temp_degfile/

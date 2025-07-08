@@ -1,8 +1,6 @@
 import time
 import os
 from typing import Dict, List, Tuple
-
-# Assuming these modules are implemented elsewhere
 from no_memory.Graph import Graph
 from no_memory.Helper import Helper
 from no_memory.Settings import Settings
@@ -11,7 +9,7 @@ from no_memory.Settings import Settings
 class JaccardInit:
     """
     First component: computing Jaccard Distance in Single Machine.
-    The output of this component will be used for Dynamic Interactions on MapReduce Hadoop.
+    The output of this component will be used for Dynamic Interactions on MapReduce.
     """
     
     def __init__(self, graph_file: str, num_vertices: int, num_edges: int, lambda_val: float):
@@ -31,8 +29,6 @@ class JaccardInit:
         self.current_loops = 0
         self.log_single = None
         self.graph_file = graph_file
-        
-        # Set lambda in settings
         Settings.lambda_val = lambda_val
     
     def setup_graph(self, str_file_name: str):
@@ -64,7 +60,6 @@ class JaccardInit:
                         i_end = int(parts[1])
                         # Distance of the edge (initially 0)
                         d_weight = 0.0
-                        
                         self.m_c_graph.add_edge(i_begin, i_end, d_weight)
                     except ValueError as e:
                         print(f"Error parsing line {line_num + 1}: {line}")
@@ -83,7 +78,7 @@ class JaccardInit:
         
         # Sort neighbors for each vertex
         for vertex_id, vertex_value in self.m_c_graph.m_dict_vertices.items():
-            vertex_value.p_neighbours.sort()
+            vertex_value.pNeighbours.sort()
     
     def initialize_graph(self):
         """
@@ -105,8 +100,8 @@ class JaccardInit:
             i_end = int(parts[1])
             
             # Get neighbors of both vertices
-            star_u = self.m_c_graph.m_dict_vertices[i_begin].p_neighbours
-            star_v = self.m_c_graph.m_dict_vertices[i_end].p_neighbours
+            star_u = self.m_c_graph.m_dict_vertices[i_begin].pNeighbours
+            star_v = self.m_c_graph.m_dict_vertices[i_end].pNeighbours
             
             # Count common neighbors using two-pointer technique
             i, j = 0, 0
@@ -192,16 +187,5 @@ class JaccardInit:
         
         # Close debug logs if enabled
         if Settings.DEBUG:
-            # Settings.log_each_iteration.close()  # Uncomment if needed
+            # Settings.log_each_iteration.close()
             pass
-
-
-# Example usage (commented out):
-# if __name__ == "__main__":
-#     jaccard_init = JaccardInit(
-#         graph_file="path/to/graph.txt",
-#         num_vertices=1000,
-#         num_edges=5000,
-#         lambda_val=0.5
-#     )
-#     jaccard_init.execute()

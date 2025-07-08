@@ -1,6 +1,3 @@
-import sys
-import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from no_memory.VertexValue_v2 import VertexValue_v2
 from no_memory.EdgeValue_v2 import EdgeValue_v2
 
@@ -120,7 +117,7 @@ class Graph:
         if i_vertex_id not in self.m_dict_vertices:
             raise Exception("Vertex is not exist.")
         
-        return self.m_dict_vertices[i_vertex_id].a_weight_sum[i_step]
+        return self.m_dict_vertices[i_vertex_id].aWeightSum[i_step]
     
     def add_vertex_weight(self, i_vertex_id, d_distance, i_step):
         """
@@ -137,7 +134,7 @@ class Graph:
         if i_vertex_id not in self.m_dict_vertices:
             raise Exception("Vertex is not exist.")
         
-        self.m_dict_vertices[i_vertex_id].a_weight_sum[i_step] += 1 - d_distance
+        self.m_dict_vertices[i_vertex_id].aWeightSum[i_step] += 1 - d_distance
     
     def clear_vertex_weight(self, i_step):
         """
@@ -147,7 +144,7 @@ class Graph:
             i_step (int): Step dell'array da azzerare
         """
         for vertex_value in self.m_dict_vertices.values():
-            vertex_value.a_weight_sum[i_step] = 0
+            vertex_value.aWeightSum[i_step] = 0
     
     def get_all_edges(self):
         """
@@ -189,9 +186,9 @@ class Graph:
             # Assumendo che VertexValue_v2 sia implementato in un altro file
             vl = VertexValue_v2()
             self.m_dict_vertices[i_begin] = vl
-            vl.p_neighbours.append(i_begin)
+            vl.pNeighbours.append(i_begin)
         
-        self.m_dict_vertices[i_begin].p_neighbours.append(i_end)
+        self.m_dict_vertices[i_begin].pNeighbours.append(i_end)
     
     @staticmethod
     def refine_edge_key(i_begin, i_end):

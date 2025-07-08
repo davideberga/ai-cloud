@@ -1,12 +1,14 @@
 from pyspark.sql import SparkSession
-from pyspark import SparkContext
+from pyspark.sql.types import StructType, StructField, IntegerType, DoubleType, StringType
+from pyspark.sql import Row
 import os, sys
 import shutil
-
+import tempfile
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 from no_memory_jaccard.JaccardInit import JaccardInit
-from writable import SpecialEdgeTypeWritable, Settings
+from writable.Settings import Settings
+from pyspark.sql.functions import concat_ws
+
 spark = SparkSession.builder.appName("MyUtilPySpark").getOrCreate()
 sc = spark.sparkContext
 
@@ -45,42 +47,117 @@ class MyUtil:
         MyUtil.delete_path(binary_folder)
 
     @staticmethod
-    def compute_jaccard_distance_single_machine(hdfs_graph_file, binary_graph_file_hdfs, no_vertices, no_edges, lambda_val, degfile_out):
-        # local_graph_file = os.path.basename(hdfs_graph_file)
-        # spark.read.text(hdfs_graph_file).write.mode("overwrite").text("file://" + os.path.join(os.getcwd(), local_graph_file))
+    def compute_jaccard_distance_single_machine(graph_file, binary_graph_file, no_vertices, no_edges, lambda_val, degfile_out):
+        # Inizializza SparkSession
+        spark = SparkSession.builder \
+            .appName("JaccardDistanceComputation") \
+            .config("spark.sql.adaptive.enabled", "true") \
+            .config("spark.sql.adaptive.coalescePartitions.enabled", "true") \
+            .getOrCreate()
+        
+        try:
+            # 1. Prepara il file del grafo
+            downloaded_graph_file = os.path.basename(graph_file)
+            local_temp_dir = tempfile.mkdtemp()
+            local_graph_path = os.path.join(local_temp_dir, downloaded_graph_file)
+            
+            print(f"hdfs_graph_file: {graph_file}")
+            print(f"downloaded_graph_file: {downloaded_graph_file}")
+            
+            # 2. Esegue il calcolo della distanza di Jaccard
+            single_attractor = JaccardInit(graph_file, no_vertices, no_edges, lambda_val)
+            single_attractor.execute()
+            
+            # 3. Prepara i dati per il salvataggio in formato Spark
+            edges_data = []
+            p_edges = single_attractor.m_c_graph.get_all_edges()
+            
+            for edge_key, edge_value in p_edges.items():
+                parts = edge_key.split()
+                i_begin = int(parts[0])
+                i_end = int(parts[1])
+                
+                # Crea un record per Spark DataFrame
+                edge_record = Row(
+                    edge_type=Settings.EDGE_TYPE,
+                    begin_vertex=i_begin,
+                    end_vertex=i_end,
+                    distance=edge_value.distance,
+                    additional_field_1=-1,
+                    additional_field_2=None,
+                    additional_field_3=-1,
+                    additional_field_4=None
+                )
+                edges_data.append(edge_record)
+            
+            # 4. Crea DataFrame Spark 
+            schema = StructType([
+                StructField("edge_type", StringType(), True),
+                StructField("begin_vertex", IntegerType(), True),
+                StructField("end_vertex", IntegerType(), True),
+                StructField("distance", DoubleType(), True),
+                StructField("additional_field_1", IntegerType(), True),
+                StructField("additional_field_2", StringType(), True),
+                StructField("additional_field_3", IntegerType(), True),
+                StructField("additional_field_4", StringType(), True)
+            ])
+            
+            edges_df = spark.createDataFrame(edges_data, schema)
+            
+            # Salva in formato Parquet
+            edges_df.write \
+                .mode("overwrite") \
+                .parquet(binary_graph_file)
+            
+            # 5. Gestisce il file dei gradi
+            vertices_data = []
+            map_vertices = single_attractor.m_c_graph.m_dict_vertices
+            
+            for vertex_id, vertex_value in map_vertices.items():
+                degree = len(vertex_value.pNeighbours) - 1
+                vertices_data.append(Row(vertex_id=vertex_id, degree=degree))
+            
+            # Crea DataFrame per i gradi
+            degree_schema = StructType([
+                StructField("vertex_id", IntegerType(), True),
+                StructField("degree", IntegerType(), True)
+            ])
+            
+            degree_df = spark.createDataFrame(vertices_data, degree_schema)
+            
+            temp_degfile = "temp_degfile"
+            # Salva il file dei gradi
+            degree_df \
+                .select(concat_ws(" ", *degree_df.columns)) \
+                .write \
+                .mode("overwrite") \
+                .text(temp_degfile)
+            
+            degree_df \
+                .select(concat_ws(" ", *degree_df.columns)) \
+                .coalesce(1) \
+                .write \
+                .mode("overwrite") \
+                .text(temp_degfile)
+            
+            for filename in os.listdir(temp_degfile):
+                if filename.startswith("part-"):
+                    shutil.move(os.path.join(temp_degfile, filename), degfile_out)
+                    break
+            
+            # 6. Pulizia
+            if os.path.exists(local_temp_dir):
+                shutil.rmtree(local_temp_dir)
+                
+            print("Calcolo della distanza di Jaccard completato con successo!")
+            
+        except Exception as e:
+            print(f"Errore durante il calcolo: {str(e)}")
+            raise
+        finally:
+            # Chiude la sessione Spark
+            spark.stop()
 
-        # single_attractor = JaccardInit(local_graph_file, no_vertices, no_edges, lambda_val)
-        # single_attractor.execute()
-        # Estrai il nome del file
-        downloaded_graph_file = os.path.basename(hdfs_graph_file)
-        print(f"hdfs_graph_file: {hdfs_graph_file}")
-        print(f"downloaded_graph_file: {downloaded_graph_file}")
-
-        # Copia da HDFS al filesystem locale
-        hdfs_path = f"hdfs://{hdfs_graph_file}"  # Adatta se necessario
-        local_path = f"testgraphs/{downloaded_graph_file}"
-        # Scarica il file da HDFS sul nodo Master
-        #spark.sparkContext.addFile(hdfs_path)  # Assicura disponibilità nel cluster
-        spark._jsc.hadoopConfiguration().set("fs.defaultFS", "hdfs://")  # Configurazione base HDFS
-        os.system(f"hadoop fs -copyToLocal {hdfs_path} {local_path}")
-
-        # Esegui la computazione su singola macchina
-        single_attractor = JaccardInit(local_path, no_vertices, no_edges, lambda_val)
-        single_attractor.execute()
-
-
-        output_rdd = sc.parallelize([
-            (SpecialEdgeTypeWritable.init(Settings.EDGE_TYPE, *map(int, k.split()), ev.distance, -1, None, -1, None), None)
-            for k, ev in single_attractor.m_cGraph.GetAllEdges().items()
-        ])
-        output_rdd.saveAsSequenceFile(binary_graph_file_hdfs)
-
-        deg_rdd = sc.parallelize([
-            f"{k} {len(v.pNeighbours) - 1}" for k, v in single_attractor.m_cGraph.m_dictVertices.items()
-        ])
-        deg_rdd.saveAsTextFile(degfile_out)
-
-        os.remove(downloaded_graph_file)
 
     @staticmethod
     def convert_original_graph_to_sequence(hdfs_graph_file, binary_graph_file_hdfs):
@@ -101,17 +178,7 @@ class MyUtil:
 
     @staticmethod
     def delete_path(path: str):
-        conf = spark._jsc.hadoopConfiguration()
-        fs = spark._jvm.org.apache.hadoop.fs.FileSystem.get(conf)
-        p = spark._jvm.org.apache.hadoop.fs.Path(path)
-        if fs.exists(p):
-            fs.delete(p, True)
-
-    @staticmethod
-    def mkdirs(path: str):
-        spark = SparkSession.builder.getOrCreate()
-        conf = spark._jsc.hadoopConfiguration()
-        fs = spark._jvm.org.apache.hadoop.fs.FileSystem.get(conf)
-        p = spark._jvm.org.apache.hadoop.fs.Path(path)
-        if not fs.exists(p):
-            fs.mkdirs(p)
+        if os.path.isdir(path):
+            shutil.rmtree(path)
+        elif os.path.isfile(path):
+            os.remove(path)
