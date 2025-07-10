@@ -2,22 +2,21 @@ import os
 import sys
 import time
 import heapq
-from collections import deque
-from typing import List, Tuple, Optional
-import subprocess
+import shutil
+import tempfile
 from pyspark.sql import SparkSession
-from pyspark import SparkContext
-import time, os
-
-# Assumendo che questi moduli siano già implementati
+from pyspark.sql import Row
+from pyspark.sql.types import StructType, StructField, IntegerType, DoubleType, StringType
+from collections import deque
+from pyspark.sql import SparkSession
 from MyUtil import MyUtil
 import LoopGenStarGraphWithPrePartitions
 import LoopDynamicInteractionsFasterNoCache
 import PreComputePartition
 import LoopUpdateEdges
-import writable.SpecialEdgeTypeWritable as SpecialEdgeTypeWritable
 from single_attractor.CommunityDetection import CommunityDetection
-from no_memory_jaccard.JaccardInit import JaccardInit
+from writable.Settings import Settings
+from pyspark.sql.functions import concat_ws
 
 class MasterMR:
     """
@@ -432,12 +431,110 @@ class MasterMR:
         # Inizializzazione distanza
         if not os.path.exists(curr_edge_folder):
             os.makedirs(curr_edge_folder)
+
+        # Inizializza SparkSession
+        spark = SparkSession.builder \
+            .appName("JaccardDistanceComputation") \
+            .config("spark.sql.adaptive.enabled", "true") \
+            .config("spark.sql.adaptive.coalescePartitions.enabled", "true") \
+            .getOrCreate()
+        
+        binary_graph_file = f"{curr_edge_folder}/binary_graph_file_initialized"
             
-        MyUtil.compute_jaccard_distance_single_machine(
-            graphfile,
-            f"{curr_edge_folder}/binary_graph_file_initialized", 
-            N, M, float(lambda_val), degfile
-        )
+        single_attractor = MyUtil.compute_jaccard_distance_single_machine(
+            graphfile, binary_graph_file, N, M, float(lambda_val), degfile)
+        
+        # 1. Prepara il file del grafo
+        downloaded_graph_file = os.path.basename(graphfile)
+        local_temp_dir = tempfile.mkdtemp()
+        
+        #print(f"graph_file: {graphfile}")
+        #print(f"downloaded_graph_file: {downloaded_graph_file}")
+
+        # 2. Prepara i dati per il salvataggio in formato Spark
+        edges_data = []
+        p_edges = single_attractor.m_c_graph.get_all_edges()
+        
+        for edge_key, edge_value in p_edges.items():
+            parts = edge_key.split()
+            i_begin = int(parts[0])
+            i_end = int(parts[1])
+            
+            # Crea un record per Spark DataFrame
+            edge_record = Row(
+                edge_type=Settings.EDGE_TYPE,
+                begin_vertex=i_begin,
+                end_vertex=i_end,
+                distance=edge_value.distance,
+                additional_field_1=-1,
+                additional_field_2=None,
+                additional_field_3=-1,
+                additional_field_4=None
+            )
+            edges_data.append(edge_record)
+        
+        # 3. Crea DataFrame Spark 
+        schema = StructType([
+            StructField("edge_type", StringType(), True),
+            StructField("begin_vertex", IntegerType(), True),
+            StructField("end_vertex", IntegerType(), True),
+            StructField("distance", DoubleType(), True),
+            StructField("additional_field_1", IntegerType(), True),
+            StructField("additional_field_2", StringType(), True),
+            StructField("additional_field_3", IntegerType(), True),
+            StructField("additional_field_4", StringType(), True)
+        ])
+        
+        edges_df = spark.createDataFrame(edges_data, schema)
+        
+        # Salva in formato Parquet
+        edges_df.write \
+            .mode("overwrite") \
+            .parquet(binary_graph_file)
+        
+        # 4. Gestisce il file dei gradi
+        vertices_data = []
+        map_vertices = single_attractor.m_c_graph.m_dict_vertices
+        
+        for vertex_id, vertex_value in map_vertices.items():
+            degree = len(vertex_value.pNeighbours) - 1
+            vertices_data.append(Row(vertex_id=vertex_id, degree=degree))
+        
+        # Crea DataFrame per i gradi
+        degree_schema = StructType([
+            StructField("vertex_id", IntegerType(), True),
+            StructField("degree", IntegerType(), True)
+        ])
+        
+        degree_df = spark.createDataFrame(vertices_data, degree_schema)
+        
+        temp_degfile = "temp_degfile"
+
+        # Salva il file dei degrees
+        degree_df \
+            .select(concat_ws(" ", *degree_df.columns)) \
+            .write \
+            .mode("overwrite") \
+            .text(temp_degfile)
+        
+        degree_df \
+            .select(concat_ws(" ", *degree_df.columns)) \
+            .coalesce(1) \
+            .write \
+            .mode("overwrite") \
+            .text(temp_degfile)
+        
+        for filename in os.listdir(temp_degfile):
+            if filename.startswith("part-"):
+                shutil.move(os.path.join(temp_degfile, filename), degfile)
+                break
+        
+        # 5. Pulizia
+        if os.path.exists(local_temp_dir):
+            shutil.rmtree(local_temp_dir)
+
+        # Chiude la sessione Spark
+        spark.stop()
         
         toc = time.time()
         initialization_time = int((toc - tic) * 1000)
