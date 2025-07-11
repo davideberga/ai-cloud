@@ -1,6 +1,11 @@
 from typing import Tuple
+from attractor.DataframeSchemaProvider import DataframeSchemaProvider
 from libs.VertexValue_v2 import VertexValue_v2
 from libs.EdgeInfo import EdgeInfo
+from libs.Settings import EdgeTypeEnum
+from pyspark.sql.dataframe import DataFrame
+from pyspark.sql import Row
+from pyspark.sql import SparkSession
 
 class Graph:
     def __init__(self):
@@ -199,6 +204,38 @@ class Graph:
         
         return vertex_start, vertex_end
     
+    def get_graph_jaccard_dataframe(self, spark: SparkSession) -> DataFrame:
+        
+        schema = DataframeSchemaProvider.get_schema_graph_jaccard()
+        edges_data = []
+        edges = self.get_all_edges()
+        
+        for edge_key, edge_value in edges.items():
+             
+            vertex_start, vertex_end = Graph.from_key_to_vertex(edge_key)
+            
+            edge_record = Row(
+                edge_type=str(EdgeTypeEnum.G.value),
+                begin_vertex=vertex_start,
+                end_vertex=vertex_end,
+                distance=edge_value.distance,
+            )
+            edges_data.append(edge_record)
+        
+        return spark.createDataFrame(edges_data, schema)
+    
+    def get_degree_dataframe(self, spark: SparkSession) -> DataFrame:
+        
+        schema = DataframeSchemaProvider.get_schema_degree()
+        vertices_data = []
+        map_vertices = self.m_dict_vertices
+        
+        for vertex_id, vertex_value in map_vertices.items():
+            degree = len(vertex_value.pNeighbours) - 1
+            vertices_data.append(Row(vertex_id=vertex_id, degree=degree))
+        
+        return spark.createDataFrame(vertices_data, schema)
+
     @staticmethod
     def refine_edge_key(i_begin, i_end):
         """

@@ -1,10 +1,6 @@
 import time
-from attractor.DataframeSchemaProvider import DataframeSchemaProvider
 from libs.Graph import Graph
-from libs.Settings import EdgeTypeEnum, Settings
-from pyspark.sql.dataframe import DataFrame
-from pyspark.sql import Row
-from pyspark.sql import SparkSession
+from libs.Settings import Settings
 
 
 class GraphUtils:
@@ -153,24 +149,5 @@ class GraphUtils:
         
         return jaccard_initilized_graph
 
-    @staticmethod
-    def graph_to_dataframe(spark: SparkSession, graph: Graph) -> DataFrame:
-        
-        schema = DataframeSchemaProvider.get_schema_graph_jaccard()
-        edges_data = []
-        edges = graph.get_all_edges()
-        
-        for edge_key, edge_value in edges.items():
-             
-            vertex_start, vertex_end = Graph.from_key_to_vertex(edge_key)
-            
-            edge_record = Row(
-                edge_type=EdgeTypeEnum.G,
-                begin_vertex=vertex_start,
-                end_vertex=vertex_end,
-                distance=edge_value.distance,
-            )
-            edges_data.append(edge_record)
-        
-        return spark.createDataFrame(edges_data, schema)
+    
         

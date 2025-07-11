@@ -13,6 +13,7 @@ from pyspark.sql import SparkSession
 from attractor.MyUtil import MyUtil
 from attractor.LoopGenStarGraphWithPrePartitions import LoopGenStarGraphWithPrePartitions
 from attractor.PreComputePartition import PreComputePartition
+from libs.Graph import Graph
 from single_attractor.CommunityDetection import CommunityDetection
 from writable.Settings import Settings
 from pyspark.sql.functions import concat_ws
@@ -116,14 +117,6 @@ class MasterMR:
         
         toc = time.time()
         self.time_computing_dynamic_interactions += (toc - tic)
-    
-    def precompute_partitions(self, input_path, output, no_partitions):
-        """
-        Pre-calcola le partizioni del grafo
-        """
-        print("Pre-computing Partition of Graph.")
-        tool = PreComputePartition(self.spark)
-        res = tool.run([input_path, output, no_partitions])
     
     def update_edge(self, input_path, output, no_loops, windows_size, miu):
         """Aggiorna gli archi"""
@@ -402,8 +395,6 @@ class MasterMR:
         local_filesystem = "local"
         MyUtil.delete_path(outfolder)
 
-
-        tic = time.time()
         a = graphfile.split("/")
         
         prefix = outfolder
@@ -418,72 +409,11 @@ class MasterMR:
         # binary_graph_file = f"{curr_edge_folder}/binary_graph_file_initialized"
         
         graph_initilizer = GraphUtils( N, M, float(lambda_val)) 
-        graph_with_jaccard = graph_initilizer.init_jaccard(graphfile)
+        graph_with_jaccard : Graph = graph_initilizer.init_jaccard(graphfile)
         
-        df_graph_jaccard = GraphUtils.graph_to_dataframe(self.spark, graph_with_jaccard)
-        
-        edges_df = df_graph_jaccard
-
-        temp_binary_file = "temp_binary_file"
-
-        edges_df.coalesce(1).write \
-            .mode("overwrite") \
-            .option("delimiter", "\t") \
-            .option("header", "true") \
-            .csv(temp_binary_file)
-        
-        for filename in os.listdir(temp_binary_file):
-            if filename.startswith("part-"):
-                shutil.move(os.path.join(temp_binary_file, filename), binary_graph_file)
-                break
-        
-        # 4. Gestisce il file dei gradi
-        vertices_data = []
-        map_vertices = single_attractor.m_c_graph.m_dict_vertices
-        
-        for vertex_id, vertex_value in map_vertices.items():
-            degree = len(vertex_value.pNeighbours) - 1
-            vertices_data.append(Row(vertex_id=vertex_id, degree=degree))
-        
-        # Crea DataFrame per i gradi
-        degree_schema = StructType([
-            StructField("vertex_id", IntegerType(), True),
-            StructField("degree", IntegerType(), True)
-        ])
-        
-        degree_df = self.spark.createDataFrame(vertices_data, degree_schema)
-        
-        temp_degfile = "temp_degfile"
-
-        # Salva il file dei degrees
-        degree_df \
-            .select(concat_ws(" ", *degree_df.columns)) \
-            .write \
-            .mode("overwrite") \
-            .text(temp_degfile)
-        
-        degree_df \
-            .select(concat_ws(" ", *degree_df.columns)) \
-            .coalesce(1) \
-            .write \
-            .mode("overwrite") \
-            .text(temp_degfile)
-        
-        for filename in os.listdir(temp_degfile):
-            if filename.startswith("part-"):
-                shutil.move(os.path.join(temp_degfile, filename), degfile)
-                break
-        
-        # 5. Pulizia
-        if os.path.exists(local_temp_dir):
-            shutil.rmtree(local_temp_dir)
-        
-        toc = time.time()
-        initialization_time = int((toc - tic) * 1000)
-        
-        self.log_job.write(f"Init Interaction Time {initialization_time / 1000.0}\n")
-        self.log_job.flush()
-        print(f"Running Time of Initialization: {initialization_time / 1000.0}")
+        df_graph_jaccard = graph_with_jaccard.get_graph_jaccard_dataframe(self.spark)
+        #TODO save degree for debug inside this function
+        df_graph_degree = graph_with_jaccard.get_degree_dataframe(self.spark)
         
         # --------------------------------------------------------------------
         # ---------------------- START calcolo partizioni --------------------
@@ -492,7 +422,9 @@ class MasterMR:
         tic_pre_partition = time.time()
         partitions_out = f"{prefix}/partitions"
         
-        self.precompute_partitions(curr_edge_folder, partitions_out, no_partition_dynamic_interaction)
+        partition_computer = PreComputePartition(self.spark)
+        partition_computer.compute(df_graph_jaccard, no_partition_dynamic_interaction)
+        # self.precompute_partitions(curr_edge_folder, partitions_out, no_partition_dynamic_interaction)
         
         toc_pre_partition = time.time()
         pre_compute_partition_time = int((toc_pre_partition - tic_pre_partition) * 1000)
