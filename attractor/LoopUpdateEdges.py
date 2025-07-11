@@ -18,7 +18,6 @@ from writable.PairWritable import PairWritable
 from writable.Settings import Settings
 from writable.SpecialEdgeTypeWritable import SpecialEdgeTypeWritable
 from writable.SpecialEdgeValueWritable import SpecialEdgeValueWritable
-import MasterMR
 
 
 class BitSet:
@@ -102,7 +101,7 @@ class LoopUpdateEdgesMapper:
             yield edge, spec
             
         except Exception as e:
-            self.logger.error(f"{MasterMR.prefix_log}{traceback.format_exc()}")
+            self.logger.error(f"{main.prefix_log}{traceback.format_exc()}")
             raise e
 
 
@@ -237,7 +236,7 @@ class LoopUpdateEdgesReducer:
                     exist_delta_t = True
             
             # VALIDAZIONE DEL CODICE
-            if MasterMR.DEBUG:
+            if main.DEBUG:
                 # Se DEBUG, la somma di DI, CI, EI deve essere uguale a delta_t
                 assert abs(delta_t - (delta_di + delta_ci + delta_ei)) <= 1e-5, \
                     "Sum of DI, CI, EI must equal to delta_t"
@@ -263,7 +262,7 @@ class LoopUpdateEdgesReducer:
             if d_t_1 < 0:
                 d_t_1 = 0.0
             
-            if MasterMR.DEBUG:
+            if main.DEBUG:
                 test = f",oldDis: {dis_uv:.8f}, newDis: {d_t_1:.8f}, DI: {delta_di:.8f}, EI: {delta_ei:.8f}, CI: {delta_ci:.8f}"
                 self.mout.write("testing", key, test, f"test/test_DI_CI_EI_{self.round}")
             
@@ -275,10 +274,10 @@ class LoopUpdateEdgesReducer:
             self.mout.write("updateEdge", spec, "NullWritable", "edges/edges")
             
         except Exception as e:
-            self.logger.error(f"{MasterMR.prefix_log}{traceback.format_exc()}")
+            self.logger.error(f"{main.prefix_log}{traceback.format_exc()}")
             raise e
         except AssertionError as e:
-            self.logger.error(f"{MasterMR.prefix_log}{traceback.format_exc()}")
+            self.logger.error(f"{main.prefix_log}{traceback.format_exc()}")
             raise e
     
     def cleanup(self, context):
@@ -313,7 +312,7 @@ class LoopUpdateEdges:
             window_size = int(args[4])
             
             # Validazione input
-            if MasterMR.DEBUG:
+            if main.DEBUG:
                 assert len(input_files) == 4, "In case of DEBUG, there must be 4 input folders"
             else:
                 assert len(input_files) == 3, "In release case, there must be 3 input folders"

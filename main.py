@@ -8,11 +8,9 @@ from pyspark.sql import Row
 from pyspark.sql.types import StructType, StructField, IntegerType, DoubleType, StringType
 from collections import deque
 from pyspark.sql import SparkSession
-from MyUtil import MyUtil
-from LoopGenStarGraphWithPrePartitions import LoopGenStarGraphWithPrePartitions
-import LoopDynamicInteractionsFasterNoCache
-from PreComputePartition import PreComputePartition
-import LoopUpdateEdges
+from attractor.MyUtil import MyUtil
+from attractor.LoopGenStarGraphWithPrePartitions import LoopGenStarGraphWithPrePartitions
+from attractor.PreComputePartition import PreComputePartition
 from single_attractor.CommunityDetection import CommunityDetection
 from writable.Settings import Settings
 from pyspark.sql.functions import concat_ws
@@ -414,6 +412,8 @@ class MasterMR:
               no_reducers_dynamic_interaction, N, M, windows_size, miu,
               threshold_used_edges, cache_size_single_attractor,
               no_partition_dynamic_interaction):
+        
+        
         """Metodo principale del master"""
         
         local_filesystem = "local"

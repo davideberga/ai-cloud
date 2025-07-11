@@ -111,9 +111,14 @@ It emits the new values of d(u, v) and w for the next iteration
 When the number of non-converged edges falls below a threshold γ, MRAttractor shifts the processing to the master node for more efficient final convergence.
 
 ## Python version  
+
+```
+- Install java 17
+```
+
 - main_mrattractor/MasterMR.py is the starting point of MRAttractor.
 - To run MasterMR.py you should provide it arguments in following format:  
 ```  
-python main_mrattractor/MasterMR.py testgraphs/karate.txt MrAttractor -1 0.6 -1 0 100 -1 34 20 0.7 5000 15000000 78 5 5 0
+python main.py testgraphs/karate.txt MrAttractor -1 0.6 -1 0 100 -1 34 20 0.7 5000 15000000 78 5 5 0
 ```
 

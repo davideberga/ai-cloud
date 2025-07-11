@@ -12,8 +12,8 @@ from writable.SpecialEdgeTypeWritable import SpecialEdgeTypeWritable
 from writable.StarGraphWithPartitionWritable import StarGraphWithPartitionWritable
 from writable.StarGraphWritable import StarGraphWritable
 from writable.TripleWritable import TripleWritable
-from main_mrattractor import AttrUtils
-import MasterMR
+from attractor.AttrUtils import AttrUtils
+import main
 from writable.NeighborWritable import NeighborWritable
 
 class LoopDynamicInteractionsFasterNoCache:
@@ -104,7 +104,7 @@ class LoopDynamicInteractionsFasterNoCache:
             """Setup del mapper"""
             self.p = context.get_configuration().get_int("ro", 0)
             conf = context.get_configuration()
-            self.map_deg = AttrUtils.read_deg_map(conf, MasterMR.degree_file_key)
+            self.map_deg = AttrUtils.read_deg_map(conf, main.degree_file_key)
             
             # if MasterMR.ESTIMATION_WORK_LOAD:
             #     self.dict_load_balance = self.read_balanced_file(
@@ -124,14 +124,14 @@ class LoopDynamicInteractionsFasterNoCache:
                 star_graph_writable.set(center, deg_center, value.neighbors)
                 
                 for trip in value.triple_sub_graphs:
-                    if MasterMR.ESTIMATION_WORK_LOAD:
+                    if main.ESTIMATION_WORK_LOAD:
                         if str(trip) not in self.dict_load_balance:
                             return
                     context.write(trip, star_graph_writable)
                     
             except Exception as e:
                 traceback.print_exc()
-                logging.getLogger().error(f"{MasterMR.prefix_log}{traceback.format_exc()}")
+                logging.getLogger().error(f"{main.prefix_log}{traceback.format_exc()}")
                 if self.global_job:
                     self.global_job.kill_job()
 
@@ -348,7 +348,7 @@ class LoopDynamicInteractionsFasterNoCache:
         null_writable = None  # Equivalente di NullWritable.get()
         spec = SpecialEdgeTypeWritable()
         
-        if MasterMR.DEBUG:
+        if main.DEBUG:
             # Per scopi di debug
             spec.init(Settings.D_TYPE, ulab, vlab, di, -1, None, -1, None)
             mout.write("attr", spec, null_writable, "debug/debug")
@@ -387,7 +387,7 @@ class LoopDynamicInteractionsFasterNoCache:
             self.reducer_number = self.task_id.get_id()
             
             conf = context.get_configuration()
-            self.map_deg = AttrUtils.read_deg_map(conf, MasterMR.degree_file_key)
+            self.map_deg = AttrUtils.read_deg_map(conf, main.degree_file_key)
         
         def reduce(self, subgraph_key: TripleWritable, star_graphs: Any, context: Any) -> None:
             """
@@ -422,7 +422,7 @@ class LoopDynamicInteractionsFasterNoCache:
                     
                     deg_center = star.deg_center
                     
-                    if MasterMR.CheckDegree:
+                    if main.CheckDegree:
                         assert len(star.neighbors) == deg_center, \
                             "Il numero di vicini non corrisponde al grado del centro"
                     
@@ -490,7 +490,7 @@ class LoopDynamicInteractionsFasterNoCache:
                 
             except Exception as e:
                 traceback.print_exc()
-                logging.error(f"{MasterMR.prefix_log}{traceback.format_exc()}")
+                logging.error(f"{main.prefix_log}{traceback.format_exc()}")
                 if self.global_job:
                     self.global_job.kill_job()
         
@@ -525,8 +525,8 @@ class LoopDynamicInteractionsFasterNoCache:
             'reduce_memory_mb': reduce_memory_mb,
             'map_memory_mb': '3072',
             'num_reduce_tasks': num_reduce_tasks,
-            MasterMR.degree_file_key: degree_file,
-            MasterMR.LOAD_BALANCED_HEADER: load_balanced_header
+            main.degree_file_key: degree_file,
+            main.LOAD_BALANCED_HEADER: load_balanced_header
         }
         
         print(f"Eseguendo job: {self.jobname} Loop-{loop_info}")
