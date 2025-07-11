@@ -1,3 +1,9 @@
+from enum import Enum
+
+class EdgeTypeEnum(Enum):
+    G = 'G'
+    S = 'S'
+
 class Settings:
     
     DEBUG = True

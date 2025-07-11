@@ -4,7 +4,7 @@ Script principale per l'esecuzione dell'algoritmo Jaccard
 """
 
 import sys
-import JaccardInit  # Assumendo che JaccardInit sia implementata in jaccard_init.py
+import attractor.GraphUtils as GraphUtils  # Assumendo che JaccardInit sia implementata in jaccard_init.py
 
 
 def main():
@@ -31,7 +31,7 @@ def main():
         lambda_ = float(sys.argv[4])
         
         # Creazione ed esecuzione dell'algoritmo
-        single_attractor = JaccardInit(graphfile, no_vertices, no_edges, lambda_)
+        single_attractor = GraphUtils(graphfile, no_vertices, no_edges, lambda_)
         single_attractor.execute()
         
     except ValueError as e:

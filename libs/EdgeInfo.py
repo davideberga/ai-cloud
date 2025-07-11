@@ -1,20 +1,10 @@
-import sys
-import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from no_memory.Settings import Settings
+from libs.Settings import Settings
 
-class EdgeValue_v2:
+class EdgeInfo:
     def __init__(self, disuv):
-        """
-        Inizializza un oggetto EdgeValue_v2
-        
-        Args:
-            disuv (float): Valore della distanza (deve essere tra 0 e 1)
-        """
+
         self.b_delta_window = None
         self.i_newest_delta_index = 0
-        
-        # Inizializza l'array delle distanze
         self.a_distance = [0.0] * Settings.STEP_LENGTH
         
         # Assertion per verificare che disuv sia nell'intervallo corretto
@@ -22,6 +12,7 @@ class EdgeValue_v2:
         
         self.distance = disuv
         
+        # TODO
         # TreeSet è implementato come set ordinato in Python
         # In Python, set() è efficiente ma non mantiene l'ordine
         # Per mantenere l'ordine come TreeSet, si può usare una lista ordinata

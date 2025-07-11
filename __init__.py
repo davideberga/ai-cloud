@@ -1,1 +1,1 @@
-from no_memory_jaccard.JaccardInit import *
+from attractor.GraphUtils import *

@@ -1,9 +1,10 @@
-from no_memory.VertexValue_v2 import VertexValue_v2
-from no_memory.EdgeValue_v2 import EdgeValue_v2
+from typing import Tuple
+from libs.VertexValue_v2 import VertexValue_v2
+from libs.EdgeInfo import EdgeInfo
 
 class Graph:
     def __init__(self):
-        self.m_dict_edges = {}  # HashMap<String, EdgeValue_v2>
+        self.m_dict_edges = {}  # HashMap<String, EdgeInfo>
         self.m_dict_vertices = {}  # HashMap<Integer, VertexValue_v2>
         
         self.BEGIN_POINT = 0
@@ -26,8 +27,8 @@ class Graph:
         if edge_key in self.m_dict_edges:
             return False
         
-        # Assumendo che EdgeValue_v2 sia implementato in un altro file
-        self.m_dict_edges[edge_key] = EdgeValue_v2(d_weight)
+        # Assumendo che EdgeInfo sia implementato in un altro file
+        self.m_dict_edges[edge_key] = EdgeInfo(d_weight)
         
         self.add_vertex(i_begin, i_end)
         self.add_vertex(i_end, i_begin)
@@ -189,6 +190,14 @@ class Graph:
             vl.pNeighbours.append(i_begin)
         
         self.m_dict_vertices[i_begin].pNeighbours.append(i_end)
+    
+    def from_key_to_vertex(edge_key: str):
+        vertices = edge_key.split()
+            
+        vertex_start = int(vertices[0])
+        vertex_end = int(vertices[1])
+        
+        return vertex_start, vertex_end
     
     @staticmethod
     def refine_edge_key(i_begin, i_end):

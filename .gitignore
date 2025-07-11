@@ -15,3 +15,6 @@ temp_degfile/
 temp_binary_file/
 artifacts/
 .venv/
+
+
+graph_jaccard_initilized

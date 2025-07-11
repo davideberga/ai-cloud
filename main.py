@@ -4,6 +4,8 @@ import time
 import heapq
 import shutil
 import tempfile
+from attractor import GraphUtils
+from attractor.GraphUtils import GraphUtils
 from pyspark.sql import Row
 from pyspark.sql.types import StructType, StructField, IntegerType, DoubleType, StringType
 from collections import deque
@@ -15,6 +17,9 @@ from single_attractor.CommunityDetection import CommunityDetection
 from writable.Settings import Settings
 from pyspark.sql.functions import concat_ws
 from pyspark import SparkConf, SparkContext
+
+import warnings
+warnings.filterwarnings('ignore')
 
 class MasterMR:
     """
@@ -28,10 +33,8 @@ class MasterMR:
     FORDICT = False
     CheckDegree = False
     REDUCED_EDGE = True
-    DELETE_STALE_INFO = True
     PRE_COMPUTE_PARTITION = True
     ESTIMATION_WORK_LOAD = False
-    BACKUP_DATA = False
     
     no_reducers_for_dynamic_interactions = 20
     degree_file_key = "deg_file"
@@ -40,7 +43,6 @@ class MasterMR:
     prefix_log = "CaiGiDoKhongOn-"
         
     def __init__(self):
-        self.log_job = None
         self.time_generating_star_graph = 0.0
         self.time_computing_dynamic_interactions = 0.0
         self.time_updating_edges = 0.0
@@ -53,7 +55,8 @@ class MasterMR:
         conf.set("spark.sql.adaptive.coalescePartitions.enabled", "true")
         
         self.spark = SparkSession.builder.config(conf=conf).getOrCreate()
-        self.sc = self.spark.sparkContext  
+        self.sc = self.spark.sparkContext
+        self.sc.setLogLevel('ERROR')  
     
     class Bucket:
         """Classe per gestire i bucket nel bilanciamento del carico"""
@@ -115,7 +118,9 @@ class MasterMR:
         self.time_computing_dynamic_interactions += (toc - tic)
     
     def precompute_partitions(self, input_path, output, no_partitions):
-        """Pre-calcola le partizioni del grafo"""
+        """
+        Pre-calcola le partizioni del grafo
+        """
         print("Pre-computing Partition of Graph.")
         tool = PreComputePartition(self.spark)
         res = tool.run([input_path, output, no_partitions])
@@ -195,28 +200,7 @@ class MasterMR:
                     bucket = heapq.heappop(workload_heap)
                     for s in bucket.subgraphs:
                         writer.write(f"{s} {i}\n")
-    
-    def init_log_file(self, graphfile, cache_type, no_partition_dynamic_interaction, 
-                     no_reducers):
-        """Inizializza il file di log"""
-        a = graphfile.split("/")
-        namefile = "+".join(a)
-        
-        cache_type_messages = {
-            0: "Dynamic+Interactions+No+Cache",
-            1: "Dynamic+Interactions+With+Cache+Common+Nodes",
-            2: "Dynamic+Interactions+With+Cache+Total+Degree",
-            3: "Dynamic+Interactions+Cache+No+Priority+Queue",
-            4: "DynamicInteractions+SharedMemoryCache+NoPriorityQueue"
-        }
-        
-        if cache_type in cache_type_messages:
-            self.cache_type_message = cache_type_messages[cache_type]
-        else:
-            raise NotImplementedError("Not implemented for other cases!!!")
-        
-        log_filename = f"stat-MrAttractor-{namefile}-{self.cache_type_message}-partions-{no_partition_dynamic_interaction}-noReducers-{no_reducers}.txt"
-        self.log_job = open(log_filename, 'w')
+
     
     def reduce_edges(self, N, curr_edge_folder, hdfs, local, conf, 
                     reduced_local_edge_file, left_edges_file, prev_left_edges_file):
@@ -413,24 +397,14 @@ class MasterMR:
               threshold_used_edges, cache_size_single_attractor,
               no_partition_dynamic_interaction):
         
-        
         """Metodo principale del master"""
         
         local_filesystem = "local"
-        
-        if self.DELETE_STALE_INFO:
-            MyUtil.delete_path(outfolder)
+        MyUtil.delete_path(outfolder)
+
 
         tic = time.time()
-        
         a = graphfile.split("/")
-        backup_folder = f"backup_folder_{a[-1]}"
-        if self.BACKUP_DATA:
-            os.makedirs(backup_folder, exist_ok=True)
-        
-        # Inizializza file di log
-        self.init_log_file(graphfile, cache_type, no_partition_dynamic_interaction, 
-                          no_reducers_dynamic_interaction)
         
         prefix = outfolder
         degfile = f"{prefix}/degfile.txt"
@@ -438,56 +412,17 @@ class MasterMR:
         curr_edge_folder = f"{out_distance_init}/edges"
         
         # Inizializzazione distanza
-        if not os.path.exists(curr_edge_folder):
-            os.makedirs(curr_edge_folder)
+        # if not os.path.exists(curr_edge_folder):
+        #     os.makedirs(curr_edge_folder)
         
-        binary_graph_file = f"{curr_edge_folder}/binary_graph_file_initialized"
-            
-        single_attractor = MyUtil.compute_jaccard_distance_single_machine(
-            graphfile, binary_graph_file, N, M, float(lambda_val), degfile)
+        # binary_graph_file = f"{curr_edge_folder}/binary_graph_file_initialized"
         
-        # 1. Prepara il file del grafo
-        downloaded_graph_file = os.path.basename(graphfile)
-        local_temp_dir = tempfile.mkdtemp()
+        graph_initilizer = GraphUtils( N, M, float(lambda_val)) 
+        graph_with_jaccard = graph_initilizer.init_jaccard(graphfile)
         
-        #print(f"graph_file: {graphfile}")
-        #print(f"downloaded_graph_file: {downloaded_graph_file}")
-
-        # 2. Prepara i dati per il salvataggio in formato Spark
-        edges_data = []
-        p_edges = single_attractor.m_c_graph.get_all_edges()
+        df_graph_jaccard = GraphUtils.graph_to_dataframe(self.spark, graph_with_jaccard)
         
-        for edge_key, edge_value in p_edges.items():
-            parts = edge_key.split()
-            i_begin = int(parts[0])
-            i_end = int(parts[1])
-            
-            # Crea un record per Spark DataFrame
-            edge_record = Row(
-                edge_type=Settings.EDGE_TYPE,
-                begin_vertex=i_begin,
-                end_vertex=i_end,
-                distance=edge_value.distance,
-                additional_field_1=-1,
-                additional_field_2=None,
-                additional_field_3=-1,
-                additional_field_4=None
-            )
-            edges_data.append(edge_record)
-        
-        # 3. Crea DataFrame Spark 
-        schema = StructType([
-            StructField("edge_type", StringType(), True),
-            StructField("begin_vertex", IntegerType(), True),
-            StructField("end_vertex", IntegerType(), True),
-            StructField("distance", DoubleType(), True),
-            StructField("additional_field_1", IntegerType(), True),
-            StructField("additional_field_2", StringType(), True),
-            StructField("additional_field_3", IntegerType(), True),
-            StructField("additional_field_4", StringType(), True)
-        ])
-        
-        edges_df = self.spark.createDataFrame(edges_data, schema)
+        edges_df = df_graph_jaccard
 
         temp_binary_file = "temp_binary_file"
 
@@ -557,9 +492,7 @@ class MasterMR:
         tic_pre_partition = time.time()
         partitions_out = f"{prefix}/partitions"
         
-        if self.PRE_COMPUTE_PARTITION:
-            self.precompute_partitions(curr_edge_folder, partitions_out, 
-                                     no_partition_dynamic_interaction)
+        self.precompute_partitions(curr_edge_folder, partitions_out, no_partition_dynamic_interaction)
         
         toc_pre_partition = time.time()
         pre_compute_partition_time = int((toc_pre_partition - tic_pre_partition) * 1000)
