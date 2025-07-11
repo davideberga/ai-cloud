@@ -1,262 +1,135 @@
-#!/usr/bin/env python3
 """
-Pre-compute partitions of star graphs. A star graph has a center and list of neighbors. 
+Pre-compute partitions of star graphs using PySpark.
+A star graph has a center and list of neighbors. 
 We need to find G_{ijk} that a star graph belongs to so that we don't need to re-partition 
 the star graph times to times.
 """
-
-import sys
 import logging
-from typing import List, Tuple, Iterator
-import MasterMR
-from writable.SpecialEdgeTypeWritable import SpecialEdgeTypeWritable
-from writable.StarGraphWithPartitionWritable import StarGraphWithPartitionWritable
-from writable.TripleWritable import TripleWritable
+from typing import List
+from pyspark.sql import SparkSession
 
 class PreComputePartition:
-    """
-    MapReduce job per pre-computare le partizioni dei grafi stella
-    """
-    
     JOB_NAME = "PreComputePartition"
     
-    @staticmethod
-    def node2hash(u: int, no_partitions: int) -> int:
-        """Funzione di hash per mappare un nodo alla sua partizione"""
-        return u % no_partitions
-    
-    class Mapper:
-        """Mapper class per il job PreComputePartition"""
-        
-        def __init__(self):
-            self.p = 0  # Numero di partizioni disgiunte del grafo, default 20
-            self.logger = logging.getLogger(self.__class__.__name__)
-        
-        def setup(self, context):
-            """Setup del mapper"""
-            self.p = context.get_configuration().get_int("no_partitions", 0)
-        
-        def map(self, edge: SpecialEdgeTypeWritable, value, context):
-            """
-            Funzione di mapping
-            
-            Args:
-                edge: SpecialEdgeTypeWritable - l'edge di input
-                value: valore associato (NullWritable)
-                context: contesto MapReduce
-            """
+    def __init__(self, spark_session: SparkSession):
+        self.spark = spark_session
+        self.sc = self.spark.sparkContext 
+        self.logger = logging.getLogger(self.__class__.__name__)
+
+    def load_edges_from_input(self, input_path: str):
+        lines_rdd = self.sc.textFile(input_path)
+
+        def parse_edge_line(line):
+            line = line.strip()
+            if not line:
+                return None
+            parts = line.split('\t')
+            if len(parts) < 3:
+                return None
             try:
-                # Verifica che l'input sia un edge
-                assert edge.type == 'G', "The input must be an edge"
-                
-                u = edge.center
-                v = edge.target
-                hash_u = self.node2hash(u, self.p)
-                hash_v = self.node2hash(v, self.p)
-                
-                if hash_u == hash_v:
-                    # Caso: hashU == hashV
-                    for a in range(self.p):
-                        for b in range(a + 1, self.p):
-                            if a == hash_v or b == hash_v:
-                                continue
-                            
-                            triple_graph = TripleWritable()
-                            triple_graph.set(a, b, hash_v)
-                            
-                            # Emetti per entrambi i nodi
-                            context.write(u, triple_graph)
-                            context.write(v, triple_graph)
-                else:
-                    # Caso: hashU != hashV
-                    for a in range(self.p):
-                        if a != hash_u and a != hash_v:
-                            triple_graph = TripleWritable()
-                            triple_graph.set(a, hash_u, hash_v)
-                            
-                            # Emetti per entrambi i nodi
-                            context.write(u, triple_graph)
-                            context.write(v, triple_graph)
-                            
-            except Exception as e:
-                error_msg = f"{MasterMR.prefix_log}{str(e)}"
-                self.logger.error(error_msg)
-                raise e
+                edge_type = parts[0].strip()
+                begin_vertex = int(parts[1].strip())
+                end_vertex = int(parts[2].strip())
+                return (begin_vertex, end_vertex) if edge_type == 'G' else None
+            except:
+                return None
+
+        edges_rdd = lines_rdd.map(parse_edge_line).filter(lambda x: x is not None)
+        print(f"Loaded {edges_rdd.count()} edges of type 'G' from {input_path}")
+        return edges_rdd
+
+    def save_results(self, results_rdd, output_path: str):
+        def format_result_local(data):
+            edge_type, center, list_size, triples_data = data
+            triples_str = [f"{l},{m},{r}" for l, m, r in triples_data]
+            return f"{edge_type}\t{center}\t{list_size}\t{';'.join(triples_str)}"
         
-        def cleanup(self, context):
-            """Cleanup del mapper"""
-            pass
-    
-    class Combiner:
-        """Combiner per ridurre il traffico di rete"""
-        
-        def __init__(self):
-            self.p = 0
-            self.logger = logging.getLogger(self.__class__.__name__)
-        
-        def setup(self, context):
-            """Setup del combiner"""
-            self.p = context.get_configuration().get_int("no_partitions", 0)
-        
-        def reduce(self, vertex_key: int, values: Iterator[TripleWritable], context):
-            """
-            Funzione di combine per eliminare duplicati
-            
-            Args:
-                vertex_key: chiave del vertice
-                values: iteratore di TripleWritable
-                context: contesto MapReduce
-            """
-            try:
-                map_triplets = {}
-                
-                for adj in values:
-                    key = str(adj)
-                    # Emetti solo se non è già presente nella mappa
-                    if key not in map_triplets:
-                        context.write(vertex_key, adj)
-                        map_triplets[key] = 1
-                
-                assert len(map_triplets) <= self.p * self.p, \
-                    f"Too many triplets: {len(map_triplets)} > {self.p * self.p}"
-                    
-            except Exception as e:
-                error_msg = f"{MasterMR.prefix_log}{str(e)}"
-                self.logger.error(error_msg)
-                raise e
-        
-        def cleanup(self, context):
-            """Cleanup del combiner"""
-            pass
-    
-    class Reducer:
-        """Reducer per aggregare le partizioni"""
-        
-        def __init__(self):
-            self.p = 0
-            self.logger = logging.getLogger(self.__class__.__name__)
-            self.multiple_outputs = None
-        
-        def setup(self, context):
-            """Setup del reducer"""
-            self.p = context.get_configuration().get_int("no_partitions", 0)
-            self.multiple_outputs = context.get_multiple_outputs()
-        
-        def reduce(self, vertex_key: int, values: Iterator[TripleWritable], context):
-            """
-            Funzione di reduce per creare le partizioni finali
-            
-            Args:
-                vertex_key: chiave del vertice
-                values: iteratore di TripleWritable
-                context: contesto MapReduce
-            """
-            try:
-                # Debug per vertice specifico
-                if vertex_key == 3710:
-                    x = 0
-                    x += 1
-                
-                triples = []
-                map_triplets = {}
-                
-                # Raccoglie tutti i triplet unici
-                for adj in values:
-                    new_adj = TripleWritable()
-                    new_adj.set(adj.left, adj.mid, adj.right)
-                    map_triplets[new_adj] = 1
-                
-                assert len(map_triplets) <= self.p * self.p, \
-                    f"The number of distinct Triplets should be smaller than p*p: {len(map_triplets)} > {self.p * self.p}"
-                
-                # Converte in lista
-                for triplet in map_triplets.keys():
-                    triples.append(triplet)
-                
-                # Crea l'oggetto SpecialEdgeTypeWritable
-                special = SpecialEdgeTypeWritable()
-                special.init('S', vertex_key, -1, -1, len(triples), triples, -1, None)
-                
-                # Scrive l'output usando MultipleOutputs
-                self.multiple_outputs.write("graph", special, None, "partitions")
-                
-            except Exception as e:
-                error_msg = f"{MasterMR.prefix_log}{str(e)}"
-                self.logger.error(error_msg)
-                raise e
-        
-        def cleanup(self, context):
-            """Cleanup del reducer"""
-            if self.multiple_outputs:
-                self.multiple_outputs.close()
-    
+        formatted_rdd = results_rdd.map(format_result_local)
+        formatted_rdd.coalesce(1).saveAsTextFile(output_path)
+
     def run(self, args: List[str]) -> int:
-        """
-        Esegue il job MapReduce
-        
-        Args:
-            args: lista di argomenti [input_path, output_path, no_partitions]
-            
-        Returns:
-            int: codice di ritorno (1 per successo)
-        """
         try:
             if len(args) < 3:
                 raise ValueError("Usage: PreComputePartition <input_path> <output_path> <no_partitions>")
-            
-            input_files = args[0]
-            output_files = args[1]
-            no_partitions = int(args[2])
-            
-            # Configurazione del job
-            job_config = {
-                'job_name': self.JOB_NAME,
-                'mapper_class': self.Mapper,
-                'combiner_class': self.Combiner,
-                'reducer_class': self.Reducer,
-                'input_format': 'SequenceFileInputFormat',
-                'output_format': 'SequenceFileOutputFormat',
-                'input_paths': [input_files],
-                'output_path': output_files,
-                'no_partitions': no_partitions,
-                'split_max_size': 5143265,
-                'multiple_outputs': {
-                    'graph': {
-                        'format': 'SequenceFileOutputFormat',
-                        'key_class': 'SpecialEdgeTypeWritable',
-                        'value_class': 'NullWritable'
-                    }
-                }
-            }
-            
-            # Qui dovresti integrare con il tuo framework MapReduce Python
-            # Ad esempio, se usi mrjob, pyspark, o un altro framework
-            
+
+            input_path, output_path, no_partitions = args[0], args[1], int(args[2])
+
             print(f"Starting job: {self.JOB_NAME}")
-            print(f"Input: {input_files}")
-            print(f"Output: {output_files}")
+            print(f"Input: {input_path}")
+            print(f"Output: {output_path}")
             print(f"Partitions: {no_partitions}")
-            
-            # Placeholder per l'esecuzione del job
-            # job_result = execute_mapreduce_job(job_config)
-            
+
+            edges_rdd = self.load_edges_from_input(input_path)
+
+            # Cattura no_partitions in una variabile locale per evitare problemi di serializzazione
+            p = no_partitions
+
+            # Definisci tutte le funzioni localmente nel metodo run()
+            def node2hash_local(u, no_partitions):
+                return u % no_partitions
+
+            def map_function_local(edge_data):
+                try:
+                    center, target = edge_data
+                    u = center
+                    v = target
+                    
+                    hash_u = node2hash_local(u, p)
+                    hash_v = node2hash_local(v, p)
+                    
+                    results = []
+
+                    if hash_u == hash_v:
+                        for a in range(p):
+                            for b in range(a + 1, p):
+                                if a == hash_v or b == hash_v:
+                                    continue
+                                triple = (a, b, hash_v)
+                                results.append((u, triple))
+                                results.append((v, triple))
+                    else:
+                        for a in range(p):
+                            if a != hash_u and a != hash_v:
+                                triple = (a, hash_u, hash_v)
+                                results.append((u, triple))
+                                results.append((v, triple))
+
+                    return results
+                except Exception as e:
+                    raise RuntimeError(f"Error in map_function: {e}")
+
+            def combine_function_local(vertex_triples):
+                try:
+                    vertex, triples = vertex_triples
+                    unique_triples = set(triples)
+                    return (vertex, list(unique_triples))
+                except Exception as e:
+                    raise RuntimeError(f"Error in combine_function: {e}")
+
+            def reduce_function_local(vertex_triples):
+                try:
+                    vertex, triples = vertex_triples
+                    assert len(triples) <= p * p, f"The number of distinct Triplets should be smaller than p*p: {len(triples)} > {p * p}"
+
+                    triples_data = [(t[0], t[1], t[2]) for t in triples]
+                    return ('S', vertex, len(triples), triples_data)
+                except Exception as e:
+                    raise RuntimeError(f"Error in reduce_function: {e}")
+
+            # Applica le trasformazioni usando le funzioni locali
+            mapped_rdd = edges_rdd.flatMap(map_function_local)
+            grouped_rdd = mapped_rdd.groupByKey()
+            combined_rdd = grouped_rdd.map(combine_function_local)
+            results_rdd = combined_rdd.map(reduce_function_local)
+
+            self.save_results(results_rdd, output_path)
+
+            print(f"Job completed successfully!")
             return 1
-            
+
         except Exception as e:
-            logging.error(f"Error running job: {str(e)}")
+            print(f"Error running job: {e}")
             return 0
 
-
-# def main():
-#     """Funzione main per eseguire il job da command line"""
-#     if len(sys.argv) < 4:
-#         print("Usage: python precompute_partition.py <input_path> <output_path> <no_partitions>")
-#         sys.exit(1)
-    
-#     job = PreComputePartition()
-#     result = job.run(sys.argv[1:])
-#     sys.exit(0 if result == 1 else 1)
-
-
-# if __name__ == "__main__":
-#     main()
+    def stop(self):
+        self.spark.stop()

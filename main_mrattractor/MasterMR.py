@@ -4,19 +4,19 @@ import time
 import heapq
 import shutil
 import tempfile
-from pyspark.sql import SparkSession
 from pyspark.sql import Row
 from pyspark.sql.types import StructType, StructField, IntegerType, DoubleType, StringType
 from collections import deque
 from pyspark.sql import SparkSession
 from MyUtil import MyUtil
-import LoopGenStarGraphWithPrePartitions
+from LoopGenStarGraphWithPrePartitions import LoopGenStarGraphWithPrePartitions
 import LoopDynamicInteractionsFasterNoCache
-import PreComputePartition
+from PreComputePartition import PreComputePartition
 import LoopUpdateEdges
 from single_attractor.CommunityDetection import CommunityDetection
 from writable.Settings import Settings
 from pyspark.sql.functions import concat_ws
+from pyspark import SparkConf, SparkContext
 
 class MasterMR:
     """
@@ -47,6 +47,15 @@ class MasterMR:
         self.time_computing_dynamic_interactions = 0.0
         self.time_updating_edges = 0.0
         self.time_running_on_single_machine = 0.0
+
+        # Crea UNA SOLA SparkSession
+        conf = SparkConf()
+        conf.setAppName("MasterMR_Pipeline")
+        conf.set("spark.sql.adaptive.enabled", "true")
+        conf.set("spark.sql.adaptive.coalescePartitions.enabled", "true")
+        
+        self.spark = SparkSession.builder.config(conf=conf).getOrCreate()
+        self.sc = self.spark.sparkContext  
     
     class Bucket:
         """Classe per gestire i bucket nel bilanciamento del carico"""
@@ -85,7 +94,7 @@ class MasterMR:
         print("Generating Star Graphs+Distance+PrePartition.")
         
         # Simula l'esecuzione di ToolRunner
-        tool = LoopGenStarGraphWithPrePartitions()
+        tool = LoopGenStarGraphWithPrePartitions(self.spark)
         res = tool.run([inputs, output, degfile])
         
         toc = time.time()
@@ -110,7 +119,7 @@ class MasterMR:
     def precompute_partitions(self, input_path, output, no_partitions):
         """Pre-calcola le partizioni del grafo"""
         print("Pre-computing Partition of Graph.")
-        tool = PreComputePartition()
+        tool = PreComputePartition(self.spark)
         res = tool.run([input_path, output, no_partitions])
     
     def update_edge(self, input_path, output, no_loops, windows_size, miu):
@@ -431,13 +440,6 @@ class MasterMR:
         # Inizializzazione distanza
         if not os.path.exists(curr_edge_folder):
             os.makedirs(curr_edge_folder)
-
-        # Inizializza SparkSession
-        spark = SparkSession.builder \
-            .appName("JaccardDistanceComputation") \
-            .config("spark.sql.adaptive.enabled", "true") \
-            .config("spark.sql.adaptive.coalescePartitions.enabled", "true") \
-            .getOrCreate()
         
         binary_graph_file = f"{curr_edge_folder}/binary_graph_file_initialized"
             
@@ -485,12 +487,20 @@ class MasterMR:
             StructField("additional_field_4", StringType(), True)
         ])
         
-        edges_df = spark.createDataFrame(edges_data, schema)
-        
-        # Salva in formato Parquet
-        edges_df.write \
+        edges_df = self.spark.createDataFrame(edges_data, schema)
+
+        temp_binary_file = "temp_binary_file"
+
+        edges_df.coalesce(1).write \
             .mode("overwrite") \
-            .parquet(binary_graph_file)
+            .option("delimiter", "\t") \
+            .option("header", "true") \
+            .csv(temp_binary_file)
+        
+        for filename in os.listdir(temp_binary_file):
+            if filename.startswith("part-"):
+                shutil.move(os.path.join(temp_binary_file, filename), binary_graph_file)
+                break
         
         # 4. Gestisce il file dei gradi
         vertices_data = []
@@ -506,7 +516,7 @@ class MasterMR:
             StructField("degree", IntegerType(), True)
         ])
         
-        degree_df = spark.createDataFrame(vertices_data, degree_schema)
+        degree_df = self.spark.createDataFrame(vertices_data, degree_schema)
         
         temp_degfile = "temp_degfile"
 
@@ -532,9 +542,6 @@ class MasterMR:
         # 5. Pulizia
         if os.path.exists(local_temp_dir):
             shutil.rmtree(local_temp_dir)
-
-        # Chiude la sessione Spark
-        spark.stop()
         
         toc = time.time()
         initialization_time = int((toc - tic) * 1000)
@@ -543,7 +550,10 @@ class MasterMR:
         self.log_job.flush()
         print(f"Running Time of Initialization: {initialization_time / 1000.0}")
         
-        # Pre-calcola partizioni
+        # --------------------------------------------------------------------
+        # ---------------------- START calcolo partizioni --------------------
+        # --------------------------------------------------------------------
+
         tic_pre_partition = time.time()
         partitions_out = f"{prefix}/partitions"
         
@@ -555,10 +565,15 @@ class MasterMR:
         pre_compute_partition_time = int((toc_pre_partition - tic_pre_partition) * 1000)
         self.log_job.write(f"Running time of Pre-partition of all edges: (seconds){pre_compute_partition_time/1000.0} p={no_partition_dynamic_interaction}\n")
         self.log_job.flush()
+
+        # --------------------------------------------------------------------
+        # ---------------------- END calcolo partizioni ----------------------
+        # --------------------------------------------------------------------
         
         using_sliding_window = int(windows_size) > 0
         current_sliding_window_folder = f"{prefix}/sliding_empty"
-        MyUtil.mkdirs(current_sliding_window_folder), 
+        if not os.path.exists(current_sliding_window_folder):
+            os.makedirs(current_sliding_window_folder)
         
         # Loop principale delle interazioni dinamiche
         flag = True
@@ -734,6 +749,10 @@ class MasterMR:
             
             cnt_round += 1
 
+        """Chiudi SparkSession (chiude anche SparkContext automaticamente)"""
+        if self.spark:
+            self.spark.stop()
+            print("SparkSession and SparkContext stopped")
 
 def main():
     """
@@ -784,11 +803,6 @@ def main():
             "[0] means no caching at all \n "
         )
     
-    # Check for backup data usage (if 17th argument exists)
-    use_backup_data = False
-    if len(args) > 16 and int(args[16]) == 1:
-        use_backup_data = True
-    
     # Create MasterMR instance and call master method
     
     master_mr = MasterMR()
@@ -811,7 +825,6 @@ def main():
         cache_size_single_attractor=cache_size_single_attractor,
         no_partition_dynamic_interaction=no_partition_dynamic_interaction
     )
-
 
 if __name__ == "__main__":
     main()

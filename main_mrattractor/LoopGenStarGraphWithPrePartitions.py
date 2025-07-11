@@ -1,270 +1,351 @@
-#!/usr/bin/env python3
 """
 Generate star graphs from edges + pre-computed partitions.
-Python translation of LoopGenStarGraphWithPrePartitions.java
+PySpark implementation of LoopGenStarGraphWithPrePartitions
 """
-
-import sys
 import logging
 import traceback
-from collections import defaultdict
-from typing import List, Dict, Tuple, Iterator
-import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-# Assumendo che queste classi siano già implementate in altri file
-from writable.NeighborWritable import NeighborWritable
-from writable.Settings import Settings
-from writable.SpecialEdgeTypeWritable import SpecialEdgeTypeWritable
-from writable.StarGraphWithPartitionWritable import StarGraphWithPartitionWritable
-from writable.StarGraphWritable import StarGraphWritable
-from writable.TripleWritable import TripleWritable
-from main_mrattractor.MasterMR import MasterMR
-from main_mrattractor.AttrUtils import AttrUtils
+from collections import namedtuple
+from typing import List, Dict
+from pyspark.sql import SparkSession
+from pyspark.sql.types import *
+from pyspark.sql.functions import *
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
-logger_map = logging.getLogger('LoopGenStarGraphWithPrePartitions.Map')
-logger_reduce = logging.getLogger('LoopGenStarGraphWithPrePartitions.Reduce')
+logger = logging.getLogger('LoopGenStarGraphWithPrePartitions.PySpark')
+
+# Define simple data structures to replace Writable classes
+Neighbor = namedtuple('Neighbor', ['vertex_id', 'weight'])
+Triple = namedtuple('Triple', ['left', 'mid', 'right'])
+SpecialEdgeType = namedtuple('SpecialEdgeType', ['type', 'center', 'target', 'weight', 'triplet_graphs'])
+StarGraphWithPartition = namedtuple('StarGraphWithPartition', ['center', 'neighbors', 'triples'])
+
+# Constants to replace Settings class
+STAR_GRAPH = 'S'
+EDGE_TYPE = 'G'
+
+# Define parsing function outside of class to avoid serialization issues
+def parse_text_line(line):
+    """
+    Parse text line to SpecialEdgeType
+    Assuming format: type\tcenter\ttarget\tweight\t[triplet_data]
+    """
+    try:
+        parts = line.strip().split('\t')
+        if len(parts) < 3:
+            return None
+            
+        edge_type = parts[0].strip()
+        center = int(parts[1])
+        
+        if edge_type == STAR_GRAPH:
+            # Star graph format: S\tcenter\tnum_triples\ttriple1,triple2,...
+            if len(parts) >= 4:
+                num_triples = int(parts[2])
+                triplet_graphs = []
+                if len(parts) > 3 and parts[3]:
+                    triple_strs = parts[3].split(';')
+                    for triple_str in triple_strs:
+                        if triple_str:
+                            left, mid, right = map(int, triple_str.split(','))
+                            triplet_graphs.append(Triple(left, mid, right))
+                
+                return SpecialEdgeType(
+                    type=STAR_GRAPH,
+                    center=center,
+                    target=-1,
+                    weight=0.0,
+                    triplet_graphs=triplet_graphs
+                )
+                
+        elif edge_type == EDGE_TYPE:
+            # Edge format: G\tcenter\ttarget\tweight
+            if len(parts) >= 4:
+                target = int(parts[2])
+                weight = float(parts[3])
+                
+                return SpecialEdgeType(
+                    type=EDGE_TYPE,
+                    center=center,
+                    target=target,
+                    weight=weight,
+                    triplet_graphs=[]
+                )
+        
+        return None
+        
+    except Exception as e:
+        logger.error(f"Error parsing line: {line}, error: {e}")
+        return None
+
+
+# Define map function at module level to avoid serialization issues
+def map_function_global(line_id):
+    """
+    Map function that processes each edge - PySpark version
+    """
+    try:
+        results = []
+        
+        if line_id.type == STAR_GRAPH:  # Star graph type
+            key = line_id.center
+            results.append((key, line_id))
+            
+        elif line_id.type == EDGE_TYPE:  # Graph/Edge type
+            # Emit for center vertex
+            key = line_id.center
+            value = SpecialEdgeType(
+                type=EDGE_TYPE,
+                center=line_id.center,
+                target=line_id.target,
+                weight=line_id.weight,
+                triplet_graphs=[]
+            )
+            results.append((key, value))
+            
+            # Emit for target vertex (undirected edge)
+            key = line_id.target
+            value = SpecialEdgeType(
+                type=EDGE_TYPE,
+                center=line_id.target,
+                target=line_id.center,
+                weight=line_id.weight,
+                triplet_graphs=[]
+            )
+            results.append((key, value))
+            
+        return results
+        
+    except Exception as e:
+        error_msg = f"[STAR_GRAPH_GEN] Map Error: {traceback.format_exc()}"
+        print(error_msg)  # Use print instead of logger in worker
+        raise
+
+
+# Define reduce function at module level to avoid serialization issues
+def reduce_function_global(key_values):
+    """
+    Reduce function that processes values for each key - PySpark version
+    """
+    try:
+        key, values = key_values
+        center = key
+        deg_cnt = 0
+        count_info_partitions = 0
+        neighbors = []
+        triples = []
+        
+        # Convert values to list if it's an iterator
+        if hasattr(values, '__iter__') and not isinstance(values, list):
+            values = list(values)
+        
+        for value in values:
+            assert center == value.center, f"Center mismatch: {center} != {value.center}"
+            
+            if value.type == STAR_GRAPH:
+                # Partition information
+                count_info_partitions += 1
+                for trip in value.triplet_graphs:
+                    triples.append(Triple(trip.left, trip.mid, trip.right))
+                    
+            elif value.type == EDGE_TYPE:
+                # Edge information
+                neighbor = Neighbor(value.target, value.weight)
+                neighbors.append(neighbor)
+                deg_cnt += 1
+        
+        # Check if we have partition information
+        if count_info_partitions == 0:
+            # Skip if no partition info
+            return []
+        
+        assert count_info_partitions == 1, f"Expected 1 partition info, got {count_info_partitions}"
+        
+        # Sort neighbors by vertex_id
+        neighbors.sort(key=lambda x: x.vertex_id)
+        
+        # Create and return star graph
+        star = StarGraphWithPartition(
+            center=center,
+            neighbors=neighbors,
+            triples=triples
+        )
+        
+        return [star]
+        
+    except Exception as e:
+        error_msg = f"[STAR_GRAPH_GEN] Reduce Error: {traceback.format_exc()}"
+        print(error_msg)  # Use print instead of logger in worker
+        raise
+
+
+# Define format function at module level
+def format_star_graph(star):
+    """Format star graph for output"""
+    center = star.center
+    neighbors_str = ','.join([f"{n.vertex_id}:{n.weight}" for n in star.neighbors])
+    triples_str = ';'.join([f"{t.left},{t.mid},{t.right}" for t in star.triples])
+    return f"{center}\t{neighbors_str}\t{triples_str}"
 
 
 class LoopGenStarGraphWithPrePartitions:
     """
-    Main class for generating star graphs with pre-computed partitions
+    PySpark implementation for generating star graphs with pre-computed partitions
     """
     
-    job_name = "Generate Star Graphs With PreComputed-Partitions."
-    global_job = None
+    job_name = "Generate Star Graphs With PreComputed-Partitions (PySpark)"
     
-    def __init__(self, config: Dict = None):
-        self.config = config or {}
+    def __init__(self, spark_session: SparkSession):
+        self.spark = spark_session
+        self.sc = spark_session.sparkContext
         self.map_deg = {}
+        self.DEBUG = False
+        self.check_degree = False
+        self.prefix_log = "[STAR_GRAPH_GEN]"
     
-    class Mapper:
+    def _load_degree_file(self, degree_file: str) -> Dict[int, int]:
         """
-        Mapper class equivalent to the Java Map class
-        Input: Each line is an undirected unweighted edge (u,v)
-        """
+        Load degree file using PySpark
         
-        def __init__(self):
-            self.map_deg = {}
-        
-        def setup(self, context):
-            """Setup phase for mapper"""
-            pass
-        
-        def map(self, line_id: SpecialEdgeTypeWritable, null_value, context) -> Iterator[Tuple]:
-            """
-            Map function that processes each edge
+        Args:
+            degree_file: Path to degree file
             
-            Args:
-                line_id: SpecialEdgeTypeWritable containing edge information
-                null_value: Null value (not used)
-                context: MapReduce context
-                
-            Yields:
-                Tuple of (key, value) pairs for reducer
-            """
-            try:
-                if line_id.type == 'S':  # Star graph type
-                    key = line_id.center
-                    yield (key, line_id)
-                    
-                elif line_id.type == 'G':  # Graph/Edge type
-                    # Emit for center vertex
-                    key = line_id.center
-                    value = SpecialEdgeTypeWritable()
-                    value.init('G', line_id.center, line_id.target, 
-                              line_id.weight, -1, None, -1, None)
-                    yield (key, value)
-                    
-                    # Emit for target vertex (undirected edge)
-                    key = line_id.target
-                    value = SpecialEdgeTypeWritable()
-                    value.init('G', line_id.target, line_id.center, 
-                              line_id.weight, -1, None, -1, None)
-                    yield (key, value)
-                    
-                    if MasterMR.DEBUG:
-                        print(f"Distance of edge: {line_id.target} {line_id.center}: {line_id.weight}")
-                        
-            except Exception as e:
-                error_msg = f"{MasterMR.prefix_log} {traceback.format_exc()}"
-                logger_map.error(error_msg)
-                if LoopGenStarGraphWithPrePartitions.global_job:
-                    LoopGenStarGraphWithPrePartitions.global_job.kill_job()
-                raise
+        Returns:
+            Dictionary mapping vertex_id to degree
+        """
+        try:
+            # Read degree file as RDD
+            degree_rdd = self.sc.textFile(degree_file)
+            
+            # Parse degree file (assuming format: vertex_id,degree)
+            def parse_degree_line(line):
+                parts = line.strip().split()
+                if len(parts) >= 2:
+                    try:
+                        vertex_id = int(parts[0])
+                        degree = int(parts[1])
+                        return (vertex_id, degree)
+                    except ValueError:
+                        # Skip lines that can't be parsed as integers
+                        return None
+                return None
+            
+            degree_pairs = degree_rdd.map(parse_degree_line).filter(lambda x: x is not None)
+            degree_dict = degree_pairs.collectAsMap()
+            
+            logger.info(f"Loaded {len(degree_dict)} degree entries from {degree_file}")
+            return degree_dict
+            
+        except Exception as e:
+            logger.error(f"Error loading degree file {degree_file}: {traceback.format_exc()}")
+            raise
     
-    class Reducer:
+    def _read_input_data(self, input_files: List[str]):
         """
-        Reducer class equivalent to the Java Reduce class
+        Read input data from files
+        
+        Args:
+            input_files: List of input file paths
+            
+        Returns:
+            RDD of SpecialEdgeType objects
         """
-        
-        def __init__(self):
-            self.multiple_outputs = None
-            self.p = 20
-            self.map_deg = {}
-        
-        def setup(self, context):
-            """Setup phase for reducer"""
-            self.multiple_outputs = context.get_multiple_outputs()
+        try:
+            all_rdds = []
+            for input_file in input_files:
+                # Read as text file and parse - use the global function
+                rdd = self.sc.textFile(input_file)
+                rdd = rdd.map(parse_text_line).filter(lambda x: x is not None)
+                all_rdds.append(rdd)
             
-            # Read degree map from configuration
-            conf = context.get_configuration()
-            self.map_deg = AttrUtils.read_deg_map(conf, MasterMR.degree_file_key)
+            # Union all RDDs
+            if len(all_rdds) == 1:
+                return all_rdds[0]
+            else:
+                return self.sc.union(all_rdds)
+                
+        except Exception as e:
+            logger.error(f"Error reading input data: {traceback.format_exc()}")
+            raise
+    
+    def _save_output(self, star_graphs_rdd, output_path: str):
+        """
+        Save star graphs to output path
         
-        def reduce(self, key: int, values: List[SpecialEdgeTypeWritable], context) -> None:
-            """
-            Reduce function that processes values for each key
+        Args:
+            star_graphs_rdd: RDD of StarGraphWithPartition objects
+            output_path: Output path
+        """
+        try:
+            # Create output directory structure
+            star_output_path = f"{output_path}/star"
             
-            Args:
-                key: Center vertex ID
-                values: List of SpecialEdgeTypeWritable objects
-                context: MapReduce context
-            """
-            try:
-                center = key
-                deg_cnt = 0
-                count_info_partitions = 0
-                neighbors = []
-                triples = []
-                
-                for value in values:
-                    assert center == value.center, f"Center mismatch: {center} != {value.center}"
-                    
-                    if value.type == Settings.STAR_GRAPH:
-                        # Partition information
-                        count_info_partitions += 1
-                        for trip in value.triplet_graphs:
-                            new_trip = TripleWritable()
-                            new_trip.set(trip.left, trip.mid, trip.right)
-                            triples.append(new_trip)
-                            
-                    elif value.type == Settings.EDGE_TYPE:
-                        # Edge information
-                        neighbor = NeighborWritable()
-                        neighbor.set(value.target, value.weight)
-                        neighbors.append(neighbor)
-                        deg_cnt += 1
-                
-                assert count_info_partitions == 1, f"Expected 1 partition info, got {count_info_partitions}"
-                
-                deg_center = self.map_deg.get(center)
-                
-                # THEOREM: Star graph with neighbors < true_degree is unnecessary
-                # since neighbors are only for exclusive interactions
-                if deg_cnt < deg_center:
-                    return
-                
-                # Degree check if enabled
-                if MasterMR.check_degree:
-                    assert deg_cnt == deg_center, f"degcnt: {deg_cnt}, while key.degnode: {deg_center}"
-                
-                # Sort neighbors
-                neighbors.sort(key=lambda x: x.vertex_id)
-                
-                # Create and output star graph
-                star = StarGraphWithPartitionWritable()
-                star.set(center, neighbors, triples)
-                
-                self.multiple_outputs.write("graph", None, star, "star/star")
-                
-            except Exception as e:
-                error_msg = f"{MasterMR.prefix_log} {traceback.format_exc()}"
-                logger_reduce.error(error_msg)
-                if LoopGenStarGraphWithPrePartitions.global_job:
-                    LoopGenStarGraphWithPrePartitions.global_job.kill_job()
-                raise
-        
-        def cleanup(self, context):
-            """Cleanup phase for reducer"""
-            if self.multiple_outputs:
-                self.multiple_outputs.close()
+            # Convert to string format for saving using global function
+            formatted_rdd = star_graphs_rdd.map(format_star_graph)
+            formatted_rdd.saveAsTextFile(star_output_path)
+            
+            logger.info(f"Star graphs saved to {star_output_path}")
+            
+        except Exception as e:
+            logger.error(f"Error saving output: {traceback.format_exc()}")
+            raise
     
     def run(self, args: List[str]) -> int:
         """
-        Main run method equivalent to Java's run method
+        Main run method - PySpark implementation
         
         Args:
-            args: Command line arguments
+            args: Command line arguments [input_files, output_path, degree_file]
             
         Returns:
-            Status code (1 for success)
+            Status code (1 for success, 0 for failure)
         """
         try:
             # Parse arguments
             input_files = args[0].split(",")
-            output_files = args[1]
+            output_path = args[1]
             degree_file = args[2]
             
-            # Create job configuration
-            job_config = {
-                'job_name': self.job_name,
-                'mapper_class': self.Mapper,
-                'reducer_class': self.Reducer,
-                'num_reduce_tasks': 40,
-                'input_format': 'SequenceFileInputFormat',
-                'output_format': 'SequenceFileOutputFormat',
-                'map_output_key_class': int,
-                'map_output_value_class': SpecialEdgeTypeWritable,
-                'output_key_class': type(None),
-                'output_value_class': StarGraphWithPartitionWritable,
-                'input_paths': [input_files[0], input_files[1]],
-                'output_path': output_files,
-                'degree_file_key': degree_file
-            }
+            logger.info(f"Starting {self.job_name}")
+            logger.info(f"Input files: {input_files}")
+            logger.info(f"Output path: {output_path}")
+            logger.info(f"Degree file: {degree_file}")
             
-            # Set global job reference
-            LoopGenStarGraphWithPrePartitions.global_job = self
+            # Load degree file
+            self.map_deg = self._load_degree_file(degree_file)
             
-            # Configure multiple outputs
-            self._add_named_output("graph", "SequenceFileOutputFormat", 
-                                 type(None), StarGraphWithPartitionWritable)
+            # Read input data
+            input_rdd = self._read_input_data(input_files)
             
-            # Delete output directory if exists
-            self._delete_path(output_files)
+            # Apply map function - flatMap to handle multiple outputs per input
+            mapped_rdd = input_rdd.flatMap(map_function_global)
             
-            # Wait for job completion
-            success = self._wait_for_completion(job_config)
+            # Group by key (equivalent to shuffle phase in MapReduce)
+            grouped_rdd = mapped_rdd.groupByKey()
             
-            return 1 if success else 0
+            # Apply reduce function
+            star_graphs_rdd = grouped_rdd.flatMap(reduce_function_global)
+            
+            # Cache the result for potential reuse
+            star_graphs_rdd.cache()
+            
+            # Count for logging
+            star_count = star_graphs_rdd.count()
+            logger.info(f"Generated {star_count} star graphs")
+            
+            # Save output
+            self._save_output(star_graphs_rdd, output_path)
+            
+            logger.info(f"Job completed successfully")
+            return 1
             
         except Exception as e:
-            logger_reduce.error(f"Job execution failed: {traceback.format_exc()}")
+            logger.error(f"Job execution failed: {traceback.format_exc()}")
             return 0
-    
-    def _add_named_output(self, name: str, format_class: str, 
-                         key_class: type, value_class: type):
-        """Add named output for multiple outputs"""
-        # Implementation would depend on the Python MapReduce framework being used
-        pass
-    
-    def _delete_path(self, path: str):
-        """Delete output path if it exists"""
-        # Implementation would depend on the file system being used
-        pass
-    
-    def _wait_for_completion(self, job_config: Dict) -> bool:
-        """Wait for job completion"""
-        # Implementation would depend on the MapReduce framework being used
-        return True
     
     def kill_job(self):
         """Kill the current job"""
-        # Implementation would depend on the MapReduce framework being used
-        pass
-
-
-def main():
-    """Main entry point"""
-    if len(sys.argv) < 4:
-        print("Usage: python loop_gen_star_graph_with_pre_partitions.py <input_files> <output_path> <degree_file>")
-        sys.exit(1)
-    
-    tool = LoopGenStarGraphWithPrePartitions()
-    result = tool.run(sys.argv[1:])
-    sys.exit(result)
-
-
-if __name__ == "__main__":
-    main()
+        try:
+            self.sc.stop()
+        except:
+            pass

@@ -12,4 +12,5 @@ MrAttractor/
 !requirements.txt
 ours/
 temp_degfile/
+temp_binary_file/
 artifacts/
