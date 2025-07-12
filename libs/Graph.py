@@ -6,6 +6,7 @@ from libs.Settings import EdgeTypeEnum
 from pyspark.sql.dataframe import DataFrame
 from pyspark.sql import Row
 from pyspark.sql import SparkSession
+from libs.Settings import Settings
 
 class Graph:
     def __init__(self):
@@ -233,6 +234,12 @@ class Graph:
         for vertex_id, vertex_value in map_vertices.items():
             degree = len(vertex_value.pNeighbours) - 1
             vertices_data.append(Row(vertex_id=vertex_id, degree=degree))
+
+        # Debug output if enabled
+        if Settings.DEBUG:
+            with open("graph_degrees", 'w') as degree_init_out:
+                for vertex_id, degree_value in vertices_data:
+                    degree_init_out.write(f"{vertex_id} {degree_value}\n")
         
         return spark.createDataFrame(vertices_data, schema)
 

@@ -6,7 +6,7 @@ the star graph times to times.
 """
 
 import logging
-from typing import List
+from typing import List, Tuple
 from pyspark.sql import SparkSession
 from pyspark.sql.dataframe import DataFrame
 
@@ -19,8 +19,6 @@ class PreComputePartition:
         self.sc = self.spark.sparkContext
         self.logger = logging.getLogger(self.__class__.__name__)
         
-    
-
     def compute(self, df_edge_with_jaccard: DataFrame, n_partitions: int) -> int:
         print("Starting pre computation of partitions")
         
@@ -31,11 +29,13 @@ class PreComputePartition:
         
         n_partitions = int(n_partitions)
 
-        def map_function_local(edge_data):
+        # input: edge(u,v)
+        # output: (u, (i, j, k)) (v, (i, j, k)) where i,j,k are partitions
+        def map_function(edge_data) -> List[Tuple[int, Tuple[int, int, int]]]:
 
-            vertex_start, vertex_end  = edge_data.vertex_start, edge_data.vertex_end
-            hash_u = node_to_hash(vertex_start, n_partitions)
-            hash_v = node_to_hash(vertex_end, n_partitions)
+            u, v  = edge_data.vertex_start, edge_data.vertex_end
+            hash_u = node_to_hash(u, n_partitions)
+            hash_v = node_to_hash(v, n_partitions)
             
             results = []
 
@@ -45,37 +45,33 @@ class PreComputePartition:
                         if a == hash_v or b == hash_v:
                             continue
                         triple = (a, b, hash_v)
-                        results.append((vertex_start, triple))
-                        results.append((vertex_end, triple))
+                        results.append((u, triple))
+                        results.append((v, triple))
             else:
                 for a in range(n_partitions):
                     if a != hash_u and a != hash_v:
                         triple = (a, hash_u, hash_v)
-                        results.append((vertex_start, triple))
-                        results.append((vertex_end, triple))
+                        results.append((u, triple))
+                        results.append((v, triple))
 
             return results
 
-
-        def reduce_triples(vertex, triples):
+        # To create the rappresentation of the star graph
+        # input: (u, {(i, j, k), ...})
+        # outpuy: ("S", u, len(triples), triples)
+        def reduce_function(vertex_triples_set: Tuple[int, set]):
+            vertex, triples = vertex_triples_set
             triples_data = []
-            for t in triples:
-                stringified = t[0] + " " + t[1] + " " + t[2]
-                triples_data.append(stringified)
-                
-            return ("S", vertex, len(triples), triples_data)
+            for (i,j,k) in triples:
+                triple_string = f"{i} {j} {k}"
+                triples_data.append(triple_string)
+    
+            return ("S", vertex, len(triples_data), triples_data)
         
-        map_output = rdd_edge_with_jaccard.flatMap(map_function_local).groupByKey()
-        # Dataframe with vertex_id, triple=(i,j,k)
-        
-
-
-        # Applica le trasformazioni usando le funzioni locali
-        mapped_rdd = rdd_edge_with_jaccard.flatMap(map_function_local)
-        grouped_rdd = mapped_rdd.groupByKey()
-        combined_rdd = grouped_rdd.map(combine_function_local)
-        results_rdd = combined_rdd.map(reduce_function_local)
+        map_output = rdd_edge_with_jaccard.flatMap(map_function).groupByKey() # Dataframe with vertex_id, triple=(i,j,k)
+        combined_output = map_output.mapValues(set) # Dataframe with vertex_id, set of triples
+        reduce_output = combined_output.map(reduce_function) # Dataframe with star graph representation
 
         print("Pre computation of partitions: END")
         
-        return results_rdd
+        return reduce_output

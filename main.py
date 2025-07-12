@@ -412,7 +412,7 @@ class MasterMR:
         graph_with_jaccard : Graph = graph_initilizer.init_jaccard(graphfile)
         
         df_graph_jaccard = graph_with_jaccard.get_graph_jaccard_dataframe(self.spark)
-        #TODO save degree for debug inside this function
+        
         df_graph_degree = graph_with_jaccard.get_degree_dataframe(self.spark)
         
         # --------------------------------------------------------------------
@@ -423,13 +423,13 @@ class MasterMR:
         partitions_out = f"{prefix}/partitions"
         
         partition_computer = PreComputePartition(self.spark)
-        partition_computer.compute(df_graph_jaccard, no_partition_dynamic_interaction)
+        df_partitioned = partition_computer.compute(df_graph_jaccard, no_partition_dynamic_interaction)
         # self.precompute_partitions(curr_edge_folder, partitions_out, no_partition_dynamic_interaction)
         
         toc_pre_partition = time.time()
         pre_compute_partition_time = int((toc_pre_partition - tic_pre_partition) * 1000)
-        self.log_job.write(f"Running time of Pre-partition of all edges: (seconds){pre_compute_partition_time/1000.0} p={no_partition_dynamic_interaction}\n")
-        self.log_job.flush()
+        # self.log_job.write(f"Running time of Pre-partition of all edges: (seconds){pre_compute_partition_time/1000.0} p={no_partition_dynamic_interaction}\n")
+        # self.log_job.flush()
 
         # --------------------------------------------------------------------
         # ---------------------- END calcolo partizioni ----------------------

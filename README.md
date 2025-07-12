@@ -116,8 +116,8 @@ When the number of non-converged edges falls below a threshold γ, MRAttractor s
 - Install java 17
 ```
 
-- main_mrattractor/MasterMR.py is the starting point of MRAttractor.
-- To run MasterMR.py you should provide it arguments in following format:  
+- main.py is the starting point of MRAttractor.
+- To run main.py you should provide it arguments in following format:  
 ```  
 python main.py testgraphs/karate.txt MrAttractor -1 0.6 -1 0 100 -1 34 20 0.7 5000 15000000 78 5 5 0
 ```
