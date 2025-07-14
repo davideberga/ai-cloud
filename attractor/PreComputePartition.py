@@ -39,6 +39,7 @@ class PreComputePartition:
             
             results = []
 
+            # Infra partition edges
             if hash_u == hash_v:
                 for a in range(n_partitions):
                     for b in range(a + 1, n_partitions):
@@ -47,6 +48,8 @@ class PreComputePartition:
                         triple = (a, b, hash_v)
                         results.append((u, triple))
                         results.append((v, triple))
+            
+            # Inter partition edges
             else:
                 for a in range(n_partitions):
                     if a != hash_u and a != hash_v:
@@ -59,7 +62,7 @@ class PreComputePartition:
         # To create the rappresentation of the star graph
         # input: (u, {(i, j, k), ...})
         # output: ("S", u, len(triples), triples)
-        def reduce_function(vertex_triples_set: Tuple[int, set]):
+        def reduce_function(vertex_triples_set: Tuple[int, Tuple[int, int, int]]):
             vertex, triples = vertex_triples_set
             triples_data = []
             for (i,j,k) in triples:

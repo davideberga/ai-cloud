@@ -380,9 +380,7 @@ class MasterMR:
         
         graph_initilizer = GraphUtils( N, M, float(lambda_val)) 
         graph_with_jaccard : Graph = graph_initilizer.init_jaccard(graphfile)
-        
         df_graph_jaccard = graph_with_jaccard.get_graph_jaccard_dataframe(self.spark)
-        
         df_graph_degree = graph_with_jaccard.get_degree_dataframe(self.spark)
         
         # --------------------------------------------------------------------
@@ -418,7 +416,6 @@ class MasterMR:
         # Loop principale delle interazioni dinamiche
         flag = True
         cnt_round = 0
-        cache_size = int(s_cache_size)
         prev_converged_edges_file = ""
         tic = time.time()
         
