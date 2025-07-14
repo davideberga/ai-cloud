@@ -1,10 +1,9 @@
-from pyspark.sql import DataFrame
-from pyspark import RDD
+from pyspark.sql import Row
 from pyspark.sql import SparkSession
 import logging
 from typing import List, Dict, Tuple
-import pickle
 from collections import defaultdict
+
 
 class LoopDynamicInteractionsFasterNoCache:
     def __init__(self, spark: SparkSession):
@@ -12,21 +11,28 @@ class LoopDynamicInteractionsFasterNoCache:
         self.sc = spark.sparkContext
         self.logger = logging.getLogger("LoopDynamicInteractions")
 
-    def compute(self, inputs: List):
-        # Unpack inputs
-        df_star_graph, no_partition_dynamic_interaction, lambda_val, df_graph_degree = inputs
+    def compute(
+        self, rdd_star_graph, n_partition: int, lambda_: float, df_degree_broadcasted
+    ):
+        def map_function(star_graph):
+            star = star_graph[0]
 
-        # Step 1: Broadcast degree map
-        map_deg = self._get_degree_map(df_graph_degree)
-        bcast_deg = self.sc.broadcast(map_deg)
+            center = star.center
+            neighbors = star.neighbors
+            triplets = star.triplets
+            degree = df_degree_broadcasted.value.get(center, 0)
 
-        # Step 2: Convert DataFrame to RDD
-        star_graph_rdd = df_star_graph.rdd.map(self._deserialize_star_graph)
+            results = [
+                (triplet, Row(center=center, degree=degree, neighbors=neighbors))
+                for triplet in triplets
+            ]
+            
+            return results
 
-        # Step 3: FlatMap (equivalente al mapper)
-        intermediate_rdd = star_graph_rdd.flatMap(
-            lambda star: self.map_function(star, bcast_deg.value)
-        )
+        intermediate_rdd = rdd_star_graph.flatMap(map_function)
+        grouped_by_subgraph = intermediate_rdd.groupByKey()
+        print(grouped_by_subgraph.take(1))
+        return grouped_by_subgraph
 
         # Step 4: GroupByKey to simulate shuffle by TripleWritable key
         grouped_rdd = intermediate_rdd.groupByKey()
@@ -38,23 +44,13 @@ class LoopDynamicInteractionsFasterNoCache:
 
         return result_rdd
 
-    def map_function(self, star_graph, map_deg: Dict[int, int]):
-        results = []
-        center = star_graph["center"]
-        degree = map_deg.get(center, star_graph["degree"])  # fallback if missing
-        neighbors = star_graph["neighbors"]
-        star_data = {
-            "center": center,
-            "deg": degree,
-            "neighbors": neighbors
-        }
-
-        for triplet in star_graph["tripleSubGraphs"]:
-            results.append((tuple(triplet), star_data))
-
-        return results
-
-    def reduce_function(self, triplet_key: Tuple[int, int, int], stars, lambda_val: float, map_deg: Dict[int, int]):
+    def reduce_function(
+        self,
+        triplet_key: Tuple[int, int, int],
+        stars,
+        lambda_val: float,
+        map_deg: Dict[int, int],
+    ):
         components = set(triplet_key)
         adj_main = defaultdict(list)
         adj_full = defaultdict(list)
@@ -71,7 +67,7 @@ class LoopDynamicInteractionsFasterNoCache:
             for n in neighbors:
                 neighbor = n["lab"]
                 dis = n["dis"]
-                sum_w += (1 - dis)
+                sum_w += 1 - dis
 
                 adj_full[center].append(n)
 
@@ -88,12 +84,19 @@ class LoopDynamicInteractionsFasterNoCache:
             deg_u = map_deg.get(u, 1)
             deg_v = map_deg.get(v, 1)
             result = self._union_intersection(
-                u, v, deg_u, deg_v, adj_main, adj_full, sum_weights, triplet_key, lambda_val
+                u,
+                v,
+                deg_u,
+                deg_v,
+                adj_main,
+                adj_full,
+                sum_weights,
+                triplet_key,
+                lambda_val,
             )
             output.extend(result)
 
         return output
-    
+
     def is_main_node(self, node_id: int, components: set):
-        return (node_id % len(components)) in components    
-        
+        return (node_id % len(components)) in components

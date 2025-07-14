@@ -10,10 +10,7 @@ def get_partitioned_dataframe(spark: SparkSession, reduce_output_rdd) -> DataFra
             lambda r: Row(
                 edge_type=r[0],
                 vertex_id=r[1],
-                triplets=[
-                    Row(i=int(t.split()[0]), j=int(t.split()[1]), k=int(t.split()[2]))
-                    for t in r[3]
-                ]
+                triplets=r[3]
             )
         )
         schema = DataframeSchemaProvider.get_schema_partitioned()

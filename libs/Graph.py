@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Dict, Tuple
 from attractor.DataframeSchemaProvider import DataframeSchemaProvider
 from libs.VertexValue_v2 import VertexValue_v2
 from libs.EdgeInfo import EdgeInfo
@@ -224,23 +224,21 @@ class Graph:
         
         return spark.createDataFrame(edges_data, schema)
     
-    def get_degree_dataframe(self, spark: SparkSession) -> DataFrame:
-        
-        schema = DataframeSchemaProvider.get_schema_degree()
-        vertices_data = []
+    def get_degree_dict(self) -> Dict[int, int]:
+        vertices_degree = { }
         map_vertices = self.m_dict_vertices
         
         for vertex_id, vertex_value in map_vertices.items():
             degree = len(vertex_value.pNeighbours) - 1
-            vertices_data.append(Row(vertex_id=vertex_id, degree=degree))
+            vertices_degree[vertex_id] = degree
 
         # Debug output if enabled
         if Settings.DEBUG:
             with open("graph_degrees", 'w') as degree_init_out:
-                for vertex_id, degree_value in vertices_data:
+                for vertex_id, degree_value in vertices_degree.items():
                     degree_init_out.write(f"{vertex_id} {degree_value}\n")
         
-        return spark.createDataFrame(vertices_data, schema)
+        return  vertices_degree
 
     @staticmethod
     def refine_edge_key(i_begin, i_end):

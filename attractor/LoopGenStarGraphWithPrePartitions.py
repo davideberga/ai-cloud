@@ -26,29 +26,24 @@ class LoopGenStarGraphWithPrePartitions:
         # output: represents edges or partition info associated with each vertex
         def map_function(row):
             results = []
-            if row['edge_type'] == 'S':
+            if row[0] == 'S':
                 # This is partition info
-                results.append((row.vertex_id, {'type': 'S', 'triplets': row.triplets}))
-            elif row['edge_type'] == 'G':
+                results.append((row[1], {'type': 'S', 'triplets': row[3]}))
+            elif row.edge_type == 'G':
                 # For each edge, emit both directions
                 results.append((row.vertex_start, {'type': 'G', 'target': row.vertex_end, 'weight': row.distance}))
                 results.append((row.vertex_end, {'type': 'G', 'target': row.vertex_start, 'weight': row.distance}))
             return results
         
-        jaccard_mapped = df_graph_jaccard.rdd.flatMap(map_function)
-        partitions_mapped = df_partitioned.rdd.flatMap(map_function)
+        jaccard_mapped = df_graph_jaccard.flatMap(map_function)
+        partitions_mapped = df_partitioned.flatMap(map_function)
         rdd_mapped = jaccard_mapped.union(partitions_mapped)
-
-        deg_map = {
-            row.vertex_id: row.degree for row in df_graph_degree.collect()
-        }
-        # Broadcast the degree map for efficient access in the reducer
-        broadcast_deg_map = self.spark.sparkContext.broadcast(deg_map)
 
         # input: vertex_id is the id of the certal node of the star graph
         # output: list of rows with center, neighbors, and triplets
-        def reduce_function(vertex_id, entries):
-            deg_center = broadcast_deg_map.value.get(vertex_id, 0)
+        def reduce_function(a):
+            vertex_id, entries = a
+            deg_center = df_graph_degree.value.get(vertex_id, 0)
             neighbors = []
             triplets = []
             for entry in entries:
@@ -67,7 +62,7 @@ class LoopGenStarGraphWithPrePartitions:
             return [Row(center=vertex_id, neighbors=neighbors_row, triplets=triplets)]
         
         
-        result_rdd = rdd_mapped.reduceByKey(reduce_function)
+        result_rdd = rdd_mapped.groupByKey().map(reduce_function)
 
         print("Start Star Graph Computation END")
         
