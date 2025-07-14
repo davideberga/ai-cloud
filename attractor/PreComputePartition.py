@@ -58,7 +58,7 @@ class PreComputePartition:
 
         # To create the rappresentation of the star graph
         # input: (u, {(i, j, k), ...})
-        # outpuy: ("S", u, len(triples), triples)
+        # output: ("S", u, len(triples), triples)
         def reduce_function(vertex_triples_set: Tuple[int, set]):
             vertex, triples = vertex_triples_set
             triples_data = []

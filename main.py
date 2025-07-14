@@ -2,12 +2,8 @@ import os
 import sys
 import time
 import heapq
-import shutil
-import tempfile
 from attractor import GraphUtils
 from attractor.GraphUtils import GraphUtils
-from pyspark.sql import Row
-from pyspark.sql.types import StructType, StructField, IntegerType, DoubleType, StringType
 from collections import deque
 from pyspark.sql import SparkSession
 from attractor.MyUtil import MyUtil
@@ -15,11 +11,9 @@ from attractor.LoopGenStarGraphWithPrePartitions import LoopGenStarGraphWithPreP
 from attractor.PreComputePartition import PreComputePartition
 from libs.Graph import Graph
 from single_attractor.CommunityDetection import CommunityDetection
-from writable.Settings import Settings
-from pyspark.sql.functions import concat_ws
-from pyspark import SparkConf, SparkContext
+from pyspark import SparkConf
 from attractor.RDD_to_DataFrame import get_partitioned_dataframe, get_star_graph_dataframe
-
+from attractor.LoopDynamicInteractionsFasterNoCache import LoopDynamicInteractionsFasterNoCache
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -41,7 +35,6 @@ class MasterMR:
     no_reducers_for_dynamic_interactions = 20
     degree_file_key = "deg_file"
     cache_type_message = ""
-    LOAD_BALANCED_HEADER = "LOAD_BALANCED_HEADER"
     prefix_log = "CaiGiDoKhongOn-"
         
     def __init__(self):
@@ -90,23 +83,7 @@ class MasterMR:
         
         def __eq__(self, other):
             return self.workload == other.workload
-    
-    def dynamic_interaction_faster(self, input_path, output, no_partitions, lambda_val, 
-                                 no_loops, s_cache_size, mb_per_reducers, no_reducers,
-                                 degfile, hdfs_load_balanced_file):
-        """Esegue le interazioni dinamiche"""
-        tic = time.time()
-        print("Dynamic Interactions No Cache.")
-        self.cache_type_message = "Dynamic+Interactions+No+Cache"
-        
-        tool = LoopDynamicInteractionsFasterNoCache()
-        res = tool.run([input_path, output, no_partitions, lambda_val, no_loops,
-                       s_cache_size, mb_per_reducers, no_reducers, degfile, 
-                       hdfs_load_balanced_file])
-        
-        toc = time.time()
-        self.time_computing_dynamic_interactions += (toc - tic)
-    
+     
     def update_edge(self, input_path, output, no_loops, windows_size, miu):
         """Aggiorna gli archi"""
         tic = time.time()
@@ -430,7 +407,7 @@ class MasterMR:
         # --------------------------------------------------------------------
 
         # --------------------------------------------------------------------
-        # ----------- PHASE 2: Dynamic Interactions - Star Graph -------------
+        # ----------------------- PHASE 2.1: Star Graph ----------------------
         # --------------------------------------------------------------------
         
         using_sliding_window = int(windows_size) > 0
@@ -446,16 +423,15 @@ class MasterMR:
         tic = time.time()
         
         while flag:
-            print(f"Current Loop: {cnt_round + 1}")
-            out_star_graph_with_dist = f"{prefix}/LoopPhase1"
+            # print(f"Current Loop: {cnt_round + 1}")
+            # out_star_graph_with_dist = f"{prefix}/LoopPhase1"
             
-            starting_iteration_tic = time.time()
+            # starting_iteration_tic = time.time()
             
-            # Stima del carico di lavoro
-            tic_estimation = time.time()
-            hdfs_load_balanced_file = f"{prefix}/loadEstimated/load_balanced_estimated.txt"
-            toc_estimation = time.time()
-            find_workload_balancing_time = int((toc_estimation - tic_estimation) * 1000)
+            # tic_estimation = time.time()
+            # hdfs_load_balanced_file = f"{prefix}/loadEstimated/load_balanced_estimated.txt"
+            # toc_estimation = time.time()
+            # find_workload_balancing_time = int((toc_estimation - tic_estimation) * 1000)
             # self.log_job.write(f"Running time of Estimation WorkLoad: (seconds) {find_workload_balancing_time / 1000.0} p={no_partition_dynamic_interaction}\n")
             # self.log_job.flush()
             
@@ -470,22 +446,26 @@ class MasterMR:
             self.time_generating_star_graph += (toc - tic)
             
             # --------------------------------------------------------------------
+            # ------------------- PHASE 2.2: Dynamic Interactions ----------------
+            # --------------------------------------------------------------------
             
             # Dynamic Interactions
-            out_dynamic = f"{prefix}/LoopPhase2"
-            no_loops = str(cnt_round)
+            # out_dynamic = f"{prefix}/LoopPhase2"
+            # no_loops = str(cnt_round)
+
+            tic = time.time()
+            print("Compute Dynamic Interactions")
+            # self.cache_type_message = "Dynamic+Interactions+No+Cache"
             
-            if cache_type == 0:
-                self.dynamic_interaction_faster(
-                    f"{out_star_graph_with_dist}/star", out_dynamic,
-                    no_partition_dynamic_interaction, lambda_val, no_loops,
-                    s_cache_size, mb_per_reducers, no_reducers_dynamic_interaction,
-                    degfile, hdfs_load_balanced_file)
-            else:
-                raise NotImplementedError("Not implemented for other cases!!!")
+            dynamic_interactions = LoopDynamicInteractionsFasterNoCache(self.spark)
+            rdd_dynamic_interactions = dynamic_interactions.compute([df_star_graph, no_partition_dynamic_interaction, 
+                                                                     lambda_val,df_graph_degree ])
+            
+            toc = time.time()
+            self.time_computing_dynamic_interactions += (toc - tic)
             
             # Aggiorna archi
-            out_update_edge = f"{prefix}/LoopPhase3_{no_loops}"
+            out_update_edge = f"{prefix}/LoopPhase3"
             
             if self.DEBUG:
                 input_str = f"{curr_edge_folder};{out_dynamic}/delta_dis;{out_dynamic}/debug;{current_sliding_window_folder}"
