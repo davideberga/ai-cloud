@@ -18,6 +18,7 @@ from single_attractor.CommunityDetection import CommunityDetection
 from writable.Settings import Settings
 from pyspark.sql.functions import concat_ws
 from pyspark import SparkConf, SparkContext
+from attractor.RDD_to_DataFrame import get_partitioned_dataframe, get_star_graph_dataframe
 
 import warnings
 warnings.filterwarnings('ignore')
@@ -89,18 +90,6 @@ class MasterMR:
         
         def __eq__(self, other):
             return self.workload == other.workload
-    
-    def gen_star_graphs_with_distance_pre_partition(self, inputs, output, degfile):
-        """Genera grafi a stella con pre-partizioni"""
-        tic = time.time()
-        print("Generating Star Graphs+Distance+PrePartition.")
-        
-        # Simula l'esecuzione di ToolRunner
-        tool = LoopGenStarGraphWithPrePartitions(self.spark)
-        res = tool.run([inputs, output, degfile])
-        
-        toc = time.time()
-        self.time_generating_star_graph += (toc - tic)
     
     def dynamic_interaction_faster(self, input_path, output, no_partitions, lambda_val, 
                                  no_loops, s_cache_size, mb_per_reducers, no_reducers,
@@ -407,6 +396,10 @@ class MasterMR:
         #     os.makedirs(curr_edge_folder)
         
         # binary_graph_file = f"{curr_edge_folder}/binary_graph_file_initialized"
+
+        # --------------------------------------------------------------------
+        # -------------------- PHASE 1: Jaccard Distance ---------------------
+        # --------------------------------------------------------------------
         
         graph_initilizer = GraphUtils( N, M, float(lambda_val)) 
         graph_with_jaccard : Graph = graph_initilizer.init_jaccard(graphfile)
@@ -416,23 +409,28 @@ class MasterMR:
         df_graph_degree = graph_with_jaccard.get_degree_dataframe(self.spark)
         
         # --------------------------------------------------------------------
-        # ---------------------- START calcolo partizioni --------------------
+        # ---------------------- START compute partitions --------------------
         # --------------------------------------------------------------------
 
         tic_pre_partition = time.time()
         partitions_out = f"{prefix}/partitions"
         
         partition_computer = PreComputePartition(self.spark)
-        df_partitioned = partition_computer.compute(df_graph_jaccard, no_partition_dynamic_interaction)
-        # self.precompute_partitions(curr_edge_folder, partitions_out, no_partition_dynamic_interaction)
+        partitioned = partition_computer.compute(df_graph_jaccard, no_partition_dynamic_interaction)
         
+        df_partitioned = get_partitioned_dataframe(self.spark, partitioned)
+
         toc_pre_partition = time.time()
         pre_compute_partition_time = int((toc_pre_partition - tic_pre_partition) * 1000)
         # self.log_job.write(f"Running time of Pre-partition of all edges: (seconds){pre_compute_partition_time/1000.0} p={no_partition_dynamic_interaction}\n")
         # self.log_job.flush()
 
         # --------------------------------------------------------------------
-        # ---------------------- END calcolo partizioni ----------------------
+        # ---------------------- END compute partitions ----------------------
+        # --------------------------------------------------------------------
+
+        # --------------------------------------------------------------------
+        # ----------- PHASE 2: Dynamic Interactions - Star Graph -------------
         # --------------------------------------------------------------------
         
         using_sliding_window = int(windows_size) > 0
@@ -458,15 +456,22 @@ class MasterMR:
             hdfs_load_balanced_file = f"{prefix}/loadEstimated/load_balanced_estimated.txt"
             toc_estimation = time.time()
             find_workload_balancing_time = int((toc_estimation - tic_estimation) * 1000)
-            self.log_job.write(f"Running time of Estimation WorkLoad: (seconds) {find_workload_balancing_time / 1000.0} p={no_partition_dynamic_interaction}\n")
-            self.log_job.flush()
+            # self.log_job.write(f"Running time of Estimation WorkLoad: (seconds) {find_workload_balancing_time / 1000.0} p={no_partition_dynamic_interaction}\n")
+            # self.log_job.flush()
             
-            # Genera grafi a stella con pre-partizioni
-            inputs_for_gen_star_graphs = f"{curr_edge_folder},{partitions_out}"
-            self.gen_star_graphs_with_distance_pre_partition(
-                inputs_for_gen_star_graphs, out_star_graph_with_dist, degfile)
+            tic = time.time()
+            # Generate star graph with pre-partitions
+            star_graph = LoopGenStarGraphWithPrePartitions(self.spark)
+            rdd_star_graph = star_graph.compute(df_graph_jaccard, df_partitioned, df_graph_degree)
+
+            df_star_graph = get_star_graph_dataframe(self.spark, rdd_star_graph)
+        
+            toc = time.time()
+            self.time_generating_star_graph += (toc - tic)
             
-            # Interazioni dinamiche
+            # --------------------------------------------------------------------
+            
+            # Dynamic Interactions
             out_dynamic = f"{prefix}/LoopPhase2"
             no_loops = str(cnt_round)
             

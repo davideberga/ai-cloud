@@ -190,7 +190,6 @@ class Graph:
             i_end (int): Vertice vicino da collegare
         """
         if i_begin not in self.m_dict_vertices:
-            # Assumendo che VertexValue_v2 sia implementato in un altro file
             vl = VertexValue_v2()
             self.m_dict_vertices[i_begin] = vl
             vl.pNeighbours.append(i_begin)

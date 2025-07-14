@@ -70,7 +70,7 @@ class PreComputePartition:
         
         map_output = rdd_edge_with_jaccard.flatMap(map_function).groupByKey() # Dataframe with vertex_id, triple=(i,j,k)
         combined_output = map_output.mapValues(set) # Dataframe with vertex_id, set of triples
-        reduce_output = combined_output.map(reduce_function) # Dataframe with star graph representation
+        reduce_output = combined_output.map(reduce_function) # Dataframe with ("S", vertex_id, len(triples), triples) where vertex_id is the center of the star graph in the next step
 
         print("Pre computation of partitions: END")
         
