@@ -5,13 +5,13 @@ from typing import List, Dict, Tuple
 from collections import defaultdict
 
 
-class LoopDynamicInteractionsFasterNoCache:
+class MRDynamicInteractions:
     def __init__(self, spark: SparkSession):
         self.spark = spark
         self.sc = spark.sparkContext
         self.logger = logging.getLogger("LoopDynamicInteractions")
 
-    def compute(
+    def mapReduce(
         self, rdd_star_graph, n_partition: int, lambda_: float, df_degree_broadcasted
     ):
         def map_function(star_graph):

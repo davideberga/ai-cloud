@@ -122,3 +122,14 @@ When the number of non-converged edges falls below a threshold γ, MRAttractor s
 python main.py testgraphs/karate.txt MrAttractor -1 0.6 -1 0 100 -1 34 20 0.7 5000 15000000 78 5 5 0
 ```
 
+python main.py \
+--graph-file testgraphs/karate.txt \
+--output-folder MrAttractor \
+--lambda-value 0.6 \
+--mb-per-reducer 100 \
+--num-vertices 34 \
+--num-edges 78 \
+--window-size 20 \
+--miu 0.7 \
+--threshold-used-edges 5000 \
+--num-partitions-dynamic 5

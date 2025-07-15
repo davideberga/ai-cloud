@@ -11,7 +11,7 @@ from pyspark.sql import SparkSession
 from pyspark.sql.dataframe import DataFrame
 
 
-class PreComputePartition:
+class MRPreComputePartition:
     JOB_NAME = "PreComputePartition"
 
     def __init__(self, spark_session: SparkSession):
@@ -19,7 +19,7 @@ class PreComputePartition:
         self.sc = self.spark.sparkContext
         self.logger = logging.getLogger(self.__class__.__name__)
         
-    def compute(self, rdd_edge_with_jaccard: DataFrame, n_partitions: int) -> int:
+    def mapReduce(self, rdd_edge_with_jaccard: DataFrame, n_partitions: int) -> int:
         print("Starting pre computation of partitions")
         
         def node_to_hash(u: int, no_partitions: int):
