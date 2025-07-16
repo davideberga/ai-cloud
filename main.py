@@ -123,7 +123,7 @@ def main():
         # --------------------------------------------------------------------
 
         tic = time.time()
-        print("Compute Dynamic Interactions")
+        
 
         dynamic_interactions = MRDynamicInteractions(spark)
         rdd_dynamic_interactions = dynamic_interactions.mapReduce(
@@ -131,8 +131,9 @@ def main():
             args.num_partitions,
             args.lambda_,
             rdd_graph_degree_broadcasted,
-        ).take(1)
+        )
         
+        print(rdd_dynamic_interactions.take(1))
         exit(0)
 
         toc = time.time()

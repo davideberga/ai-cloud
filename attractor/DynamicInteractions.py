@@ -1,5 +1,7 @@
 import math
 from typing import Dict, List
+from pyspark.sql.types import Row
+
 
 class DynamicInteractions:
     @staticmethod
@@ -71,7 +73,7 @@ class DynamicInteractions:
         adjListDictForExclusive: Dict[int, List],
         dictSumWeight: Dict[int, float],
         lambda_: float,
-        graph_key: List[int],
+        partition_name_splitted: List[int],
     ) -> float:
         """
         Calcola l'effetto esclusivo del nodo u sull'arco (middle, v)
@@ -105,11 +107,9 @@ class DynamicInteractions:
                 if p_u in partition_name_splitted:
                     common_main_node += 1
 
-                if DynamicInteractions.is_in_set1(
-                    DynamicInteractions.node2hash(first.vertex_id, n_partitions),
-                    graph_key[0],
-                    graph_key[1],
-                    graph_key[2],
+                if (
+                    DynamicInteractions.node2hash(first.vertex_id, n_partitions)
+                    in partition_name_splitted
                 ):
                     common_main_node += 1
 
@@ -153,16 +153,15 @@ class DynamicInteractions:
 
     @staticmethod
     def union_intersection(
-        u: int, # center
-        v , # neighbor
+        u: int,  # center
+        v,  # neighbor
         deg_u: int,
         deg_v: int,
         adjListDictMain: Dict[int, List],
         adjListDictForExclusive: Dict[int, List],
         dictSumWeight: Dict[int, float],
-        n_partitions: int, # number of partitions
+        n_partitions: int,  # number of partitions
         duv: float,
-        graph_key_partitions: List[int], # star graph?
         partition_name_splitted: List[int],
         lambda_: float,
     ):
@@ -180,104 +179,100 @@ class DynamicInteractions:
         sum_ci = 0
         sum_ei = 0
 
-        # Already computed in MRDynamicInteractions.py
-        #di = DynamicInteractions.compute_di(u, v, n_partitions, duv, deg_u, deg_v)
+        di = DynamicInteractions.compute_di(u, v, n_partitions, duv, deg_u, deg_v)
 
         while i < len_neigh_u and j < len_neigh_v:
             first = neighbors_u[i]
             second = neighbors_v[j]
 
-            p_u = DynamicInteractions.node2hash(u, no_partitions=n_partitions)
-            if p_u in partition_name_splitted:
-                main_edge_first = True
+            first_id = first.vertex_id
+            second_id = second.vertex_id
 
-            if p_u in partition_name_splitted:
-                main_edge_second = True
-
-            assert main_edge_first and main_edge_second, (
-                "C'è un arco posteriore in questo caso!!!"
+            p_first = DynamicInteractions.node2hash(
+                first_id, no_partitions=n_partitions
+            )
+            p_second = DynamicInteractions.node2hash(
+                second_id, no_partitions=n_partitions
             )
 
-            if first.vertex_id < second.vertex_id:
+            assert (
+                p_first in partition_name_splitted
+                and p_second in partition_name_splitted
+            ), "There is a rear edge"
+
+            condition = first_id < second_id
+            vertex_ei = first if condition else second
+            deg_ei = deg_u if condition else deg_v
+
+            if first_id != second_id:
                 sum_ei += DynamicInteractions.compute_ei(
-                    first.vertex_id,
+                    vertex_ei.vertex_id,
                     v,
                     u,
-                    first.weight,
+                    vertex_ei.weight,
                     duv,
-                    deg_u,
+                    deg_ei,
                     n_partitions,
                     adjListDictForExclusive,
                     dictSumWeight,
                     lambda_,
-                    graph_key_partitions,
+                    partition_name_splitted,
                 )
-                i += 1
-            elif second.vertex_id < first.vertex_id:
-                sum_ei += DynamicInteractions.compute_ei(
-                    second.vertex_id,
-                    u,
-                    v,
-                    second.weight,
-                    duv,
-                    deg_v,
-                    n_partitions,
-                    adjListDictForExclusive,
-                    dictSumWeight,
-                    lambda_,
-                    graph_key_partitions,
-                )
-                j += 1
+                if condition:
+                    i += 1
+                else:
+                    j += 1
             else:
-                common_node = first.vertex_id
                 sum_ci += DynamicInteractions.compute_ci(
-                    u, v, common_node, deg_u, deg_v, duv, first.weight, second.weight, n_partitions
+                    u,
+                    v,
+                    first_id,
+                    deg_u,
+                    deg_v,
+                    duv,
+                    first.weight,
+                    second.weight,
+                    n_partitions,
                 )
                 i += 1
                 j += 1
 
         # Processa i rimanenti vicini di u
         while i < len_neigh_u:
-            first = neighbors_u[i]
+            u_neighbour = neighbors_u[i]
             sum_ei += DynamicInteractions.compute_ei(
-                first.vertex_id,
+                u_neighbour.vertex_id,
                 v,
                 u,
-                first.weight,
+                u_neighbour.weight,
                 duv,
                 deg_u,
                 n_partitions,
                 adjListDictForExclusive,
                 dictSumWeight,
                 lambda_,
-                graph_key_partitions,
+                partition_name_splitted,
             )
             i += 1
 
         # Processa i rimanenti vicini di v
         while j < len_neigh_v:
-            second = neighbors_v[j]
+            v_neighbour = neighbors_v[j]
             sum_ei += DynamicInteractions.compute_ei(
-                second.vertex_id,
+                v_neighbour.vertex_id,
                 u,
                 v,
-                second.weight,
+                v_neighbour.weight,
                 duv,
                 deg_v,
                 n_partitions,
                 adjListDictForExclusive,
                 dictSumWeight,
                 lambda_,
-                graph_key_partitions,
+                partition_name_splitted,
             )
             j += 1
+            
+        delta =  di + sum_ci + sum_ei
 
-        return sum_ci + sum_ei
-
-        # null_writable = None  # Equivalente di NullWritable.get()
-        # spec = SpecialEdgeTypeWritable()
-
-        # spec.init(
-        #     Settings.INTERACTION_TYPE, ulab, vlab, delta_ulab_vlab, -1, None, -1, None
-        # )
-        # mout.write("attr", spec, null_writable, "delta_dis/delta_dis")
+        return Row(edge='attr', type='I', source=u, target=v, weight=delta)

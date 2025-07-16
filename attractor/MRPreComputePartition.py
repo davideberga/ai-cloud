@@ -23,9 +23,7 @@ class MRPreComputePartition:
     def mapReduce(self, rdd_edge_with_jaccard: DataFrame, n_partitions: int) -> int:
         print("Starting pre computation of partitions")
         
-        # def node_to_hash(u: int, no_partitions: int):
-        #     return u % no_partitions
-        
+
         n_partitions = int(n_partitions)
 
         # input: edge(u,v)
@@ -33,8 +31,8 @@ class MRPreComputePartition:
         def map_function(edge_data) -> List[Tuple[int, Tuple[int, int, int]]]:
 
             u, v  = edge_data.vertex_start, edge_data.vertex_end
-            hash_u = DynamicInteractions.node_to_hash(u, n_partitions)
-            hash_v = DynamicInteractions.node_to_hash(v, n_partitions)
+            hash_u = DynamicInteractions.node2hash(u, n_partitions)
+            hash_v = DynamicInteractions.node2hash(v, n_partitions)
             
             results = []
 

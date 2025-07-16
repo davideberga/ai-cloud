@@ -237,7 +237,6 @@ class Graph:
             with open("graph_degrees", 'w') as degree_init_out:
                 for vertex_id, degree_value in vertices_degree.items():
                     degree_init_out.write(f"{vertex_id} {degree_value}\n")
-        
         return  vertices_degree
 
     @staticmethod

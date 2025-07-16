@@ -6,7 +6,6 @@ from collections import defaultdict
 from args_parser import parse_arguments
 from attractor.DynamicInteractions import DynamicInteractions
 
-args = parse_arguments()
 
 class MRDynamicInteractions:
     def __init__(self, spark: SparkSession):
@@ -15,12 +14,10 @@ class MRDynamicInteractions:
         self.logger = logging.getLogger("LoopDynamicInteractions")
 
     def mapReduce(
-        self, rdd_star_graph, n_partition: int, lambda_: float, df_degree_broadcasted
+        self, rdd_star_graph, n_partition: int, _lambda_: float, df_degree_broadcasted
     ):
         partitions = n_partition
-
-        def node_to_hash(u: int, no_partitions: int):
-            return u % no_partitions
+        lambda_ = _lambda_
 
         def map_function(star_graph):
             star = star_graph[0]
@@ -40,6 +37,7 @@ class MRDynamicInteractions:
         def reduce_function(partition: Tuple[str, List]):
             stars = dict()
             s_m = []
+            result = []
 
             partition_name, star_graphs = partition
             partition_name_splitted = list(map(int, partition_name.split(" ")))
@@ -70,8 +68,8 @@ class MRDynamicInteractions:
                 if d == 1 or d == 0:
                     continue
 
-                p_u = DynamicInteractions.node2hash(u, partitions) # hash of u
-                p_v = DynamicInteractions.node2hash(v, partitions) # hash of v
+                p_u = DynamicInteractions.node2hash(u, partitions)  # hash of u
+                p_v = DynamicInteractions.node2hash(v, partitions)  # hash of v
                 deg_u = df_degree_broadcasted.value.get(u, 0)
                 deg_v = df_degree_broadcasted.value.get(v, 0)
 
@@ -114,103 +112,42 @@ class MRDynamicInteractions:
                             adjListDictMain[center].append(n)
                         else:
                             rear_edges += 1
-                        
+
                         if center not in adjListDictForExclusive.keys():
                             adjListDictForExclusive[center] = []
                         adjListDictForExclusive[center].append(n)
 
                     dictSumWeight[center] = sum_weight
-                
 
                 for edge in listEdges:
                     u = edge.center
                     v = edge.neighbor
                     distance = edge.distance
-                    
+
                     if 0 < distance < 1:
                         deg_u = df_degree_broadcasted.value.get(u)
                         deg_v = df_degree_broadcasted.value.get(v)
-                        
-                        sum_interactions += DynamicInteractions.union_intersection(
-                            u, v, deg_u, deg_v,
-                            adjListDictMain, adjListDictForExclusive,
-                            dictSumWeight, args.num_partitions, distance, 
-                            star_graph, partition_name_splitted,
-                            args.lamda_
-                        )
-                
-                        
 
+                        attr = DynamicInteractions.union_intersection(
+                            u,
+                            v,
+                            deg_u,
+                            deg_v,
+                            adjListDictMain,
+                            adjListDictForExclusive,
+                            dictSumWeight,
+                            partitions,
+                            distance,
+                            partition_name_splitted,
+                            lambda_,
+                        )
+                        result.append(attr)
+
+            return result
+        
+        print("Compute Dynamic Interactions")
         intermediate_rdd = rdd_star_graph.flatMap(map_function)
         grouped_by_subgraph = intermediate_rdd.groupByKey()
-
-        # print(grouped_by_subgraph.take(1)[0][0])
-        # print(list(grouped_by_subgraph.take(1)[0][1]))
-        return grouped_by_subgraph
-
-        # Step 4: GroupByKey to simulate shuffle by TripleWritable key
-        grouped_rdd = intermediate_rdd.groupByKey()
-
-        # Step 5: Reduce (simula la reduce di Hadoop)
-        result_rdd = grouped_rdd.flatMap(
-            lambda kv: self.reduce_function(kv[0], kv[1], lambda_val, bcast_deg.value)
-        )
-
-        return result_rdd
-
-    def reduce_function(
-        self,
-        triplet_key: Tuple[int, int, int],
-        stars,
-        lambda_val: float,
-        map_deg: Dict[int, int],
-    ):
-        components = set(triplet_key)
-        adj_main = defaultdict(list)
-        adj_full = defaultdict(list)
-        sum_weights = {}
-        edges = []
-
-        # Parse stars and build adjacency
-        for star in stars:
-            center = star["center"]
-            deg_center = star["deg"]
-            neighbors = star["neighbors"]
-
-            sum_w = 0
-            for n in neighbors:
-                neighbor = n["lab"]
-                dis = n["dis"]
-                sum_w += 1 - dis
-
-                adj_full[center].append(n)
-
-                if self.is_main_node(neighbor, components):
-                    adj_main[center].append(n)
-                    if center > neighbor and 0 < dis < 1:
-                        edges.append((center, neighbor, dis))
-
-            sum_weights[center] = sum_w
-
-        # Reduce logic: compute dynamic interactions per edge
-        output = []
-        for u, v, dis in edges:
-            deg_u = map_deg.get(u, 1)
-            deg_v = map_deg.get(v, 1)
-            result = self._union_intersection(
-                u,
-                v,
-                deg_u,
-                deg_v,
-                adj_main,
-                adj_full,
-                sum_weights,
-                triplet_key,
-                lambda_val,
-            )
-            output.extend(result)
-
-        return output
-
-    def is_main_node(self, node_id: int, components: set):
-        return (node_id % len(components)) in components
+        computed_dyni = grouped_by_subgraph.map(reduce_function)
+        print("Compute Dynamic Interactions END")
+        return computed_dyni
