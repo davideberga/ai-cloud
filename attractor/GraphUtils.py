@@ -9,21 +9,17 @@ class GraphUtils:
     The output of this component will be used for Dynamic Interactions on MapReduce.
     """
     
-    def __init__(self, num_vertices: int, num_edges: int, lambda_val: float):
+    def __init__(self, num_vertices: int):
         """
         Initialize JaccardInit with graph parameters.
         
         Args:
             graph_file: Path to the graph file
             num_vertices: Number of vertices in the graph
-            num_edges: Number of edges in the graph
-            lambda_val: Lambda parameter for calculations
         """
         self.m_i_current_step = 0
         self.cnt_vertices = num_vertices
-        self.cnt_edges = num_edges
         self.current_loops = 0
-        Settings.lambda_val = lambda_val
     
     def setup_graph(self, graph_file: str) -> Graph:
         """
@@ -53,8 +49,6 @@ class GraphUtils:
                     raise ValueError(f"Invalid number format in line {line_num + 1}") from e
         
         # Assertions to verify graph construction
-        assert len(loaded_graph.m_dict_edges) == self.cnt_edges, \
-            f"No Edges: {len(loaded_graph.m_dict_edges)}"
         assert len(loaded_graph.m_dict_vertices) == self.cnt_vertices, \
             f"No vertices: {len(loaded_graph.m_dict_vertices)}"
         
@@ -119,8 +113,6 @@ class GraphUtils:
             graph.add_vertex_weight(vertex_end, dis, self.m_i_current_step)
             
             cnt_check_sum_weight += 1
-        
-        assert cnt_check_sum_weight == self.cnt_edges
         
         # Debug output if enabled
         if Settings.DEBUG:

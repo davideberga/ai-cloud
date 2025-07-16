@@ -65,7 +65,7 @@ def main():
     # -------------------- PHASE 1: Jaccard Distance ---------------------
     # --------------------------------------------------------------------
 
-    graph_initilizer = GraphUtils(args.num_vertices, args.num_edges, float(args.lambda_value))
+    graph_initilizer = GraphUtils(args.num_vertices)
     graph_with_jaccard: Graph = graph_initilizer.init_jaccard(args.graph_file)
     df_graph_jaccard = graph_with_jaccard.get_graph_jaccard_dataframe(spark).rdd
     df_graph_degree = graph_with_jaccard.get_degree_dict()
@@ -80,7 +80,7 @@ def main():
 
     partition_computer = MRPreComputePartition(spark)
     df_partitioned = partition_computer.mapReduce(
-        df_graph_jaccard, args.num_partitions_dynamic
+        df_graph_jaccard, args.num_partitions
     )
     # print(df_partitioned.take(1))
     # df_partitioned = get_partitioned_dataframe(self.spark, partitioned)
@@ -128,8 +128,8 @@ def main():
         dynamic_interactions = MRDynamicInteractions(spark)
         rdd_dynamic_interactions = dynamic_interactions.mapReduce(
             rdd_star_graph,
-            args.num_partitions_dynamic,
-            args.lambda_value,
+            args.num_partitions,
+            args.lambda_,
             rdd_graph_degree_broadcasted,
         ).take(1)
         
@@ -176,8 +176,8 @@ def main():
                 # Esegui attractor su singola macchina
                 single_machine_attractor = CommunityDetection(
                     int(args.windows_size),
-                    float(args.miu),
-                    float(args.lambda_value),
+                    float(args.tau),
+                    float(args.lambda_),
                     cnt_round,
                     args.num_vertices,
                 )

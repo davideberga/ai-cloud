@@ -3,9 +3,10 @@ from pyspark.sql import SparkSession
 import logging
 from typing import List, Dict, Tuple
 from collections import defaultdict
-
+from args_parser import parse_arguments
 from attractor.DynamicInteractions import DynamicInteractions
 
+args = parse_arguments()
 
 class MRDynamicInteractions:
     def __init__(self, spark: SparkSession):
@@ -17,7 +18,6 @@ class MRDynamicInteractions:
         self, rdd_star_graph, n_partition: int, lambda_: float, df_degree_broadcasted
     ):
         partitions = n_partition
-        lambda_value = lambda_
 
         def node_to_hash(u: int, no_partitions: int):
             return u % no_partitions
@@ -70,8 +70,8 @@ class MRDynamicInteractions:
                 if d == 1 or d == 0:
                     continue
 
-                p_u = DynamicInteractions.node2hash(u)
-                p_v = DynamicInteractions.node2hash(v)
+                p_u = DynamicInteractions.node2hash(u, partitions) # hash of u
+                p_v = DynamicInteractions.node2hash(v, partitions) # hash of v
                 deg_u = df_degree_broadcasted.value.get(u, 0)
                 deg_v = df_degree_broadcasted.value.get(v, 0)
 
@@ -96,7 +96,7 @@ class MRDynamicInteractions:
                     for n in neighbors:
                         neighbor = n.vertex_id
                         d = n.weight
-                        p_neighbor = DynamicInteractions.node2hash(neighbor)
+                        p_neighbor = DynamicInteractions.node2hash(neighbor, partitions)
                         sum_weight += 1 - d
 
                         if p_neighbor in partition_name_splitted:
@@ -121,6 +121,7 @@ class MRDynamicInteractions:
 
                     dictSumWeight[center] = sum_weight
                 
+
                 for edge in listEdges:
                     u = edge.center
                     v = edge.neighbor
@@ -130,9 +131,13 @@ class MRDynamicInteractions:
                         deg_u = df_degree_broadcasted.value.get(u)
                         deg_v = df_degree_broadcasted.value.get(v)
                         
-                        # DynamicInteractions.union_intersection(
-                            
-                        # )
+                        sum_interactions += DynamicInteractions.union_intersection(
+                            u, v, deg_u, deg_v,
+                            adjListDictMain, adjListDictForExclusive,
+                            dictSumWeight, args.num_partitions, distance, 
+                            star_graph, partition_name_splitted,
+                            args.lamda_
+                        )
                 
                         
 

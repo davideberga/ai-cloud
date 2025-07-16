@@ -125,11 +125,10 @@ python main.py testgraphs/karate.txt MrAttractor -1 0.6 -1 0 100 -1 34 20 0.7 50
 python main.py \
 --graph-file testgraphs/karate.txt \
 --output-folder MrAttractor \
---lambda-value 0.6 \
+--lambda 0.6 \
 --mb-per-reducer 100 \
 --num-vertices 34 \
---num-edges 78 \
 --window-size 20 \
---miu 0.7 \
---threshold-used-edges 5000 \
---num-partitions-dynamic 5
+--tau 0.7 \
+--gamma 5000 \
+--num-partitions 5
