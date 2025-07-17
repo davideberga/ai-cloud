@@ -133,8 +133,7 @@ def main():
             rdd_graph_degree_broadcasted,
         )
         
-        print(rdd_dynamic_interactions.take(1))
-        exit(0)
+        
 
         toc = time.time()
         time_computing_dynamic_interactions += toc - tic
@@ -145,7 +144,10 @@ def main():
 
         tic = time.time()
         update_edges =  MRUpdateEdges(spark)
-        rdd_updated_edges = update_edges.mapReduce([input_path, output, no_loops, miu, windows_size])
+        rdd_updated_edges = update_edges.mapReduce(rdd_dynamic_interactions, args.tau, args.window_size)
+        
+        print(rdd_updated_edges.take(5))
+        exit(0)
         toc = time.time()
         time_updating_edges += toc - tic
 

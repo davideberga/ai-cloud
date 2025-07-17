@@ -40,7 +40,6 @@ class DynamicInteractions:
         n_partitions: int,
     ) -> float:
         assert 0 < dis_u_v < 1 # This arc is already convergent
-        print("SONO IN compute_ci")
         w1 = 1 - dis_u_c
         w2 = 1 - dis_v_c
         ci = -w2 * math.sin(w1) / deg_u - w1 * math.sin(w2) / deg_v
@@ -83,10 +82,6 @@ class DynamicInteractions:
         lambda_: float,
         partition_name_splitted: List[int],
     ) -> float:
-        
-        print("SONO IN compute_ei")
-        for chiave, valore in dictSumWeight.items():
-            print(f"{chiave}: {valore}")
 
         if u == v:
             return 0.0
@@ -101,8 +96,7 @@ class DynamicInteractions:
         common_main_node = 0
 
         while i < len_neigh_u and j < len_neigh_v:
-            first = neighbors_u[i]
-            second = neighbors_v[j]
+            first, second  = neighbors_u[i], neighbors_v[j]
 
             if first.vertex_id < second.vertex_id:
                 i += 1
@@ -115,12 +109,6 @@ class DynamicInteractions:
 
                 p_u = DynamicInteractions.node2hash(first.vertex_id, n_partitions)
                 if p_u in partition_name_splitted:
-                    common_main_node += 1
-
-                if (
-                    DynamicInteractions.node2hash(first.vertex_id, n_partitions)
-                    in partition_name_splitted
-                ):
                     common_main_node += 1
 
         vartheta_uv = sum_common_weight / (dictSumWeight[u] + dictSumWeight[v])
@@ -161,7 +149,6 @@ class DynamicInteractions:
 
         assert n_partitions >= 3
         assert 0 < distance_u_v < 1
-        print("SONO IN compute_di")
         di = -math.sin(1 - distance_u_v) / deg_u - math.sin(1 - distance_u_v) / deg_v
         scale = (n_partitions - 1) * (n_partitions - 2) // 2 if p_u == p_v else n_partitions - 2
         return di / scale
@@ -237,7 +224,7 @@ class DynamicInteractions:
                 else:
                     j += 1
             else:
-                print("Computing CI (row 240)")
+                # print("Computing CI (row 240)")
                 sum_ci += DynamicInteractions.compute_ci(
                     u,
                     v,
@@ -256,6 +243,7 @@ class DynamicInteractions:
         while i < len_neigh_u:
             u_neighbour = neighbors_u[i]
             print("Computing EI (row 258)")
+            print(v)
             sum_ei += DynamicInteractions.compute_ei(
                 u_neighbour.vertex_id,
                 v,
@@ -292,4 +280,4 @@ class DynamicInteractions:
             
         delta =  di + sum_ci + sum_ei
 
-        return Row(edge='attr', type='I', source=u, target=v, weight=delta)
+        return Row(edge='attr', type='I', center=u, target=v, weight=delta)

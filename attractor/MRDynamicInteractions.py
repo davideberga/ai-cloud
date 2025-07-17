@@ -20,7 +20,7 @@ class MRDynamicInteractions:
         lambda_ = _lambda_
 
         def map_function(star_graph):
-            star = star_graph[0]
+            star = star_graph
 
             center = star.center
             neighbors = star.neighbors
@@ -70,13 +70,6 @@ class MRDynamicInteractions:
 
                 p_u = DynamicInteractions.node2hash(u, partitions)  # hash of u
                 p_v = DynamicInteractions.node2hash(v, partitions)  # hash of v
-                deg_u = df_degree_broadcasted.value.get(u, 0)
-                deg_v = df_degree_broadcasted.value.get(v, 0)
-
-                sum_interactions = 0
-                # sum_interactions += DynamicInteractions.compute_di(
-                #     p_u, p_v, partitions, d, deg_u, deg_v
-                # )
 
                 adjListDictForExclusive = dict()
                 adjListDictMain = dict()
@@ -96,7 +89,7 @@ class MRDynamicInteractions:
                         d = n.weight
                         p_neighbor = DynamicInteractions.node2hash(neighbor, partitions)
                         sum_weight += 1 - d
-
+                        
                         if p_neighbor in partition_name_splitted:
                             if center > neighbor:
                                 if 0 < d < 1:
@@ -119,24 +112,20 @@ class MRDynamicInteractions:
 
                     dictSumWeight[center] = sum_weight
 
-                print("SONO IN REDUCE FUNCTION")
-                for chiave, valore in dictSumWeight.items():
-                    print(f"{chiave}: {valore}")
-
                 for edge in listEdges:
-                    u = edge.center
-                    v = edge.neighbor
+                    c = edge.center
+                    n = edge.neighbor
                     distance = edge.distance
 
                     if 0 < distance < 1:
-                        deg_u = df_degree_broadcasted.value.get(u)
-                        deg_v = df_degree_broadcasted.value.get(v)
+                        deg_c = df_degree_broadcasted.value.get(c)
+                        deg_n = df_degree_broadcasted.value.get(n)
 
                         attr = DynamicInteractions.union_intersection(
-                            u,
-                            v,
-                            deg_u,
-                            deg_v,
+                            c,
+                            n,
+                            deg_c,
+                            deg_n,
                             adjListDictMain,
                             adjListDictForExclusive,
                             dictSumWeight,
@@ -152,6 +141,6 @@ class MRDynamicInteractions:
         print("Compute Dynamic Interactions")
         intermediate_rdd = rdd_star_graph.flatMap(map_function)
         grouped_by_subgraph = intermediate_rdd.groupByKey()
-        computed_dyni = grouped_by_subgraph.map(reduce_function)
+        computed_dyni = grouped_by_subgraph.flatMap(reduce_function)
         print("Compute Dynamic Interactions END")
         return computed_dyni

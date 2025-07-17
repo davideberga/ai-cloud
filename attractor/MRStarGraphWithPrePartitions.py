@@ -62,7 +62,7 @@ class MRStarGraphWithPrePartitions:
             return [Row(center=vertex_id, neighbors=neighbors_row, triplets=triplets)]
         
         
-        result_rdd = rdd_mapped.groupByKey().map(reduce_function)
+        result_rdd = rdd_mapped.groupByKey().flatMap(reduce_function)
 
         print("Start Star Graph Computation END")
         
