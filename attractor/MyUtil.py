@@ -14,14 +14,6 @@ class MyUtil:
         elif os.path.isfile(path):
             os.remove(path)
 
-def update_edge(self, input_path, output, no_loops, windows_size, miu):
-    tic = time.time()
-    print("Update Edges.")
-    tool = LoopUpdateEdges()
-    res = tool.run([input_path, output, no_loops, miu, windows_size])
-    toc = time.time()
-    self.time_updating_edges += toc - tic
-
 def reduce_edges(
     self,
     N,

@@ -1,5 +1,4 @@
 """
-Pre-compute partitions of star graphs using PySpark.
 A star graph has a center and list of neighbors.
 We need to find G_{ijk} that a star graph belongs to so that we don't need to re-partition
 the star graph times to times.

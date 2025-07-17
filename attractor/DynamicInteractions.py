@@ -5,9 +5,9 @@ from pyspark.sql.types import Row
 
 class DynamicInteractions:
     @staticmethod
-    def is_in_set1(pu: int, a: int, b: int, c: int) -> bool:
-        # Verify if pu is in the set {a, b, c}
-        return pu == a or pu == b or pu == c
+    def is_in_set1(p_u: int, i: int, j: int, k: int) -> bool:
+        # Verify if pu is in the partition {a, b, c}
+        return p_u == i or p_u == j or p_u == k
 
     @staticmethod
     def node2hash(u: int, no_partitions: int) -> int:
@@ -24,6 +24,10 @@ class DynamicInteractions:
         s = x1 + x2 + x3
         return s
 
+    # Common Interaction (CI) computation
+    # Input: d(u,c), d(v,c), deg(u), deg(v) — where c are the common neighbors between nodes u and v (intersection).
+    # Output: If u and v have many common neighbors, it is likely that they belong to the same community.
+    # The result should be the sum of CI c(u,v).
     def compute_ci(
         u: int,
         v: int,
@@ -35,8 +39,8 @@ class DynamicInteractions:
         dis_v_c: float,
         n_partitions: int,
     ) -> float:
-        assert 0 < dis_u_v < 1, "This arc is already convergent!!!"
-
+        assert 0 < dis_u_v < 1 # This arc is already convergent
+        print("SONO IN compute_ci")
         w1 = 1 - dis_u_c
         w2 = 1 - dis_v_c
         ci = -w2 * math.sin(w1) / deg_u - w1 * math.sin(w2) / deg_v
@@ -60,7 +64,11 @@ class DynamicInteractions:
 
         ci = ci / repeat_count
         return ci
-
+    
+    # Exclusive Interaction (EI) computation
+    # Input: d(u,y), d(v,x), deg(u), deg(v) — where x is an exclusive neighbor of v and y is an exclusive neighbor of u.
+    # ρ(x, u) measures how similar x (exclusive neighbor of v) is to u, even if x is not connected to u.
+    # Output: If the exclusive neighbors of u and v are very similar to each other, it is likely that u and v belong to the same community.
     @staticmethod
     def compute_ei(
         u: int,
@@ -75,9 +83,7 @@ class DynamicInteractions:
         lambda_: float,
         partition_name_splitted: List[int],
     ) -> float:
-        """
-        Calcola l'effetto esclusivo del nodo u sull'arco (middle, v)
-        """
+        
         print("SONO IN compute_ei")
         for chiave, valore in dictSumWeight.items():
             print(f"{chiave}: {valore}")
@@ -142,19 +148,25 @@ class DynamicInteractions:
         ei /= repeat_count
         return ei
 
+    # Direct Interaction (DI) computation
+    # Input: d(u,v) → Jaccard, deg(u), deg(v)
+    # Output: Compute the attraction strength between u and v, i.e., how strong the pull is to bring them together.
+    # The smaller d(u,v) is, the more similar the two nodes are, and the higher the attraction strength.
+    # Everything is therefore computed based on the direct connection between u and v.
+
     @staticmethod
     def compute_di(
-        p_u: int, p_v: int, p: int, distance_u_v: float, deg_u: int, deg_v: int
+        p_u: int, p_v: int, n_partitions: int, distance_u_v: float, deg_u: int, deg_v: int
     ) -> float:
-        """Calcola DI dell'arco non convergente (u,v) con ridimensionamento"""
 
-        assert p >= 3, "Il numero di partizioni deve essere >= 3"
-        assert 0 < distance_u_v < 1, f"La distanza di (u, v) deve essere in (0, 1)"
-
+        assert n_partitions >= 3
+        assert 0 < distance_u_v < 1
+        print("SONO IN compute_di")
         di = -math.sin(1 - distance_u_v) / deg_u - math.sin(1 - distance_u_v) / deg_v
-        scale = (p - 1) * (p - 2) // 2 if p_u == p_v else p - 2
+        scale = (n_partitions - 1) * (n_partitions - 2) // 2 if p_u == p_v else n_partitions - 2
         return di / scale
 
+    # Compute DI, CI, and EI for the edge (u, v) in the subgraph graph_key.
     @staticmethod
     def union_intersection(
         u: int,  # center
@@ -169,9 +181,6 @@ class DynamicInteractions:
         partition_name_splitted: List[int],
         lambda_: float,
     ):
-        """
-        Calcola DI, CI, EI per l'arco (ulab, vlab) nel sottografo graph_key
-        """
         if duv < 0 or duv > 1:
             return
 
@@ -202,13 +211,14 @@ class DynamicInteractions:
             assert (
                 p_first in partition_name_splitted
                 and p_second in partition_name_splitted
-            ), "There is a rear edge"
+            ) # There is a rear edge
 
             condition = first_id < second_id
             vertex_ei = first if condition else second
             deg_ei = deg_u if condition else deg_v
 
             if first_id != second_id:
+                print("Computing EI (row 221)")
                 sum_ei += DynamicInteractions.compute_ei(
                     vertex_ei.vertex_id,
                     v,
@@ -227,6 +237,7 @@ class DynamicInteractions:
                 else:
                     j += 1
             else:
+                print("Computing CI (row 240)")
                 sum_ci += DynamicInteractions.compute_ci(
                     u,
                     v,
@@ -241,9 +252,10 @@ class DynamicInteractions:
                 i += 1
                 j += 1
 
-        # Processa i rimanenti vicini di u
+        # Process i remaining neighbors of u
         while i < len_neigh_u:
             u_neighbour = neighbors_u[i]
+            print("Computing EI (row 258)")
             sum_ei += DynamicInteractions.compute_ei(
                 u_neighbour.vertex_id,
                 v,
@@ -259,9 +271,10 @@ class DynamicInteractions:
             )
             i += 1
 
-        # Processa i rimanenti vicini di v
+        # Process j remaining neighbors of v
         while j < len_neigh_v:
             v_neighbour = neighbors_v[j]
+            print("Computing EI (row 277)")
             sum_ei += DynamicInteractions.compute_ei(
                 v_neighbour.vertex_id,
                 u,

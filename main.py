@@ -9,6 +9,7 @@ from attractor.MRStarGraphWithPrePartitions import (
     MRStarGraphWithPrePartitions,
 )
 from attractor.MRPreComputePartition import MRPreComputePartition
+from attractor.MRUpdateEdges import MRUpdateEdges
 from libs.Graph import Graph
 from single_attractor.CommunityDetection import CommunityDetection
 from pyspark import SparkConf
@@ -124,7 +125,6 @@ def main():
 
         tic = time.time()
         
-
         dynamic_interactions = MRDynamicInteractions(spark)
         rdd_dynamic_interactions = dynamic_interactions.mapReduce(
             rdd_star_graph,
@@ -143,10 +143,14 @@ def main():
         # ----------------------- PHASE 2.3: Update Edges --------------------
         # --------------------------------------------------------------------
 
-        self.update_edge(input_str, out_update_edge, no_loops, windows_size, miu)
+        tic = time.time()
+        update_edges =  MRUpdateEdges(spark)
+        rdd_updated_edges = update_edges.mapReduce([input_path, output, no_loops, miu, windows_size])
+        toc = time.time()
+        time_updating_edges += toc - tic
 
         # Riduzione degli archi
-        if self.REDUCED_EDGE:
+        if REDUCED_EDGE:
 
             print(f"Reducing the number of edges @Loops: {cnt_round + 1}")
             info = reduce_edges(

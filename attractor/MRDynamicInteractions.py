@@ -74,9 +74,9 @@ class MRDynamicInteractions:
                 deg_v = df_degree_broadcasted.value.get(v, 0)
 
                 sum_interactions = 0
-                sum_interactions += DynamicInteractions.compute_di(
-                    p_u, p_v, partitions, d, deg_u, deg_v
-                )
+                # sum_interactions += DynamicInteractions.compute_di(
+                #     p_u, p_v, partitions, d, deg_u, deg_v
+                # )
 
                 adjListDictForExclusive = dict()
                 adjListDictMain = dict()
