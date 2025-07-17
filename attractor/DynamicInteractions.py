@@ -78,6 +78,10 @@ class DynamicInteractions:
         """
         Calcola l'effetto esclusivo del nodo u sull'arco (middle, v)
         """
+        print("SONO IN compute_ei")
+        for chiave, valore in dictSumWeight.items():
+            print(f"{chiave}: {valore}")
+
         if u == v:
             return 0.0
 

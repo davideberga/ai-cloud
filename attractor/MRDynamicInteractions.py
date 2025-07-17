@@ -119,6 +119,10 @@ class MRDynamicInteractions:
 
                     dictSumWeight[center] = sum_weight
 
+                print("SONO IN REDUCE FUNCTION")
+                for chiave, valore in dictSumWeight.items():
+                    print(f"{chiave}: {valore}")
+
                 for edge in listEdges:
                     u = edge.center
                     v = edge.neighbor
