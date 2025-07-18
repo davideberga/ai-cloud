@@ -31,7 +31,6 @@ class MRDynamicInteractions:
                 (triplet, Row(center=center, degree=degree, neighbors=neighbors))
                 for triplet in triplets
             ]
-
             return results
 
         def reduce_function(partition: Tuple[str, List]):
@@ -142,5 +141,6 @@ class MRDynamicInteractions:
         intermediate_rdd = rdd_star_graph.flatMap(map_function)
         grouped_by_subgraph = intermediate_rdd.groupByKey()
         computed_dyni = grouped_by_subgraph.flatMap(reduce_function)
+
         print("Compute Dynamic Interactions END")
         return computed_dyni

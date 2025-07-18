@@ -83,9 +83,9 @@ def main():
     df_partitioned = partition_computer.mapReduce(
         df_graph_jaccard, args.num_partitions
     )
-    # print(df_partitioned.take(1))
+    # print(df_partitioned.collect())
     # df_partitioned = get_partitioned_dataframe(self.spark, partitioned)
-
+    
     toc_pre_partition = time.time()
     pre_compute_partition_time = int((toc_pre_partition - tic_pre_partition) * 1000)
     
@@ -93,7 +93,6 @@ def main():
     # ---------------------- END compute partitions ----------------------
     # --------------------------------------------------------------------
 
-   
     using_sliding_window = int(args.window_size) > 0
 
     flag = True
@@ -115,10 +114,12 @@ def main():
         )
 
         # df_star_graph = get_star_graph_dataframe(self.spark, rdd_star_graph)
+        
+        # print(rdd_star_graph.collect())
 
         toc = time.time()
         time_generating_star_graph += toc - tic
-
+        
         # --------------------------------------------------------------------
         # ------------------- PHASE 2.2: Dynamic Interactions ----------------
         # --------------------------------------------------------------------
@@ -133,11 +134,11 @@ def main():
             rdd_graph_degree_broadcasted,
         )
         
+        print(rdd_dynamic_interactions.collect())
         
-
         toc = time.time()
         time_computing_dynamic_interactions += toc - tic
-
+        exit(0)
         # --------------------------------------------------------------------
         # ----------------------- PHASE 2.3: Update Edges --------------------
         # --------------------------------------------------------------------

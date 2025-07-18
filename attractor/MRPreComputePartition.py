@@ -41,7 +41,7 @@ class MRPreComputePartition:
                     for b in range(a + 1, n_partitions):
                         if a == hash_v or b == hash_v:
                             continue
-                        triple = (a, b, hash_v)
+                        triple = tuple(sorted((a, b, hash_v)))
                         results.append((u, triple))
                         results.append((v, triple))
             
@@ -49,7 +49,7 @@ class MRPreComputePartition:
             else:
                 for a in range(n_partitions):
                     if a != hash_u and a != hash_v:
-                        triple = (a, hash_u, hash_v)
+                        triple = tuple(sorted((a, hash_u, hash_v)))
                         results.append((u, triple))
                         results.append((v, triple))
 

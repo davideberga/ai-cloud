@@ -146,7 +146,7 @@ class DynamicInteractions:
     def compute_di(
         p_u: int, p_v: int, n_partitions: int, distance_u_v: float, deg_u: int, deg_v: int
     ) -> float:
-
+        print("Computing DI")
         assert n_partitions >= 3
         assert 0 < distance_u_v < 1
         di = -math.sin(1 - distance_u_v) / deg_u - math.sin(1 - distance_u_v) / deg_v
@@ -224,7 +224,7 @@ class DynamicInteractions:
                 else:
                     j += 1
             else:
-                # print("Computing CI (row 240)")
+                print("Computing CI (row 240)")
                 sum_ci += DynamicInteractions.compute_ci(
                     u,
                     v,
@@ -243,7 +243,7 @@ class DynamicInteractions:
         while i < len_neigh_u:
             u_neighbour = neighbors_u[i]
             print("Computing EI (row 258)")
-            print(v)
+            #print(v)
             sum_ei += DynamicInteractions.compute_ei(
                 u_neighbour.vertex_id,
                 v,
@@ -280,4 +280,4 @@ class DynamicInteractions:
             
         delta =  di + sum_ci + sum_ei
 
-        return Row(edge='attr', type='I', center=u, target=v, weight=delta)
+        return Row(type='I', center=u, target=v, weight=delta)
