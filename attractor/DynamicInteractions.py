@@ -61,7 +61,7 @@ class DynamicInteractions:
             # Three vertex of different partitions
             repeat_count = 1
 
-        ci = ci / repeat_count
+        ci = ci * 1.0 / repeat_count
         return ci
     
     # Exclusive Interaction (EI) computation
@@ -87,8 +87,8 @@ class DynamicInteractions:
             return 0.0
 
         vartheta_uv = 0
-        neighbors_u = adjListDictForExclusive.get(u, [])
-        neighbors_v = adjListDictForExclusive.get(v, [])
+        neighbors_u = adjListDictForExclusive.get(u)
+        neighbors_v = adjListDictForExclusive.get(v)
 
         i, j = 0, 0
         len_neigh_u, len_neigh_v = len(neighbors_u), len(neighbors_v)
@@ -111,7 +111,7 @@ class DynamicInteractions:
                 if p_u in partition_name_splitted:
                     common_main_node += 1
 
-        vartheta_uv = sum_common_weight / (dictSumWeight[u] + dictSumWeight[v])
+        vartheta_uv = sum_common_weight / (dictSumWeight.get(u) + dictSumWeight.get(v))
 
         rho_uv = vartheta_uv
         if vartheta_uv < lambda_:
@@ -144,12 +144,14 @@ class DynamicInteractions:
 
     @staticmethod
     def compute_di(
-        p_u: int, p_v: int, n_partitions: int, distance_u_v: float, deg_u: int, deg_v: int
+        u: int, v: int, n_partitions: int, distance_u_v: float, deg_u: int, deg_v: int
     ) -> float:
-        print("Computing DI")
+        #print("Computing DI")
         assert n_partitions >= 3
         assert 0 < distance_u_v < 1
         di = -math.sin(1 - distance_u_v) / deg_u - math.sin(1 - distance_u_v) / deg_v
+        p_u = DynamicInteractions.node2hash(u, n_partitions)
+        p_v = DynamicInteractions.node2hash(v, n_partitions)
         scale = (n_partitions - 1) * (n_partitions - 2) // 2 if p_u == p_v else n_partitions - 2
         return di / scale
 
@@ -171,8 +173,8 @@ class DynamicInteractions:
         if duv < 0 or duv > 1:
             return
 
-        neighbors_u = adjListDictMain.get(u, [])
-        neighbors_v = adjListDictMain.get(v, [])
+        neighbors_u = adjListDictMain.get(u) # [Row(vertex_id, weight)]
+        neighbors_v = adjListDictMain.get(v)
 
         i, j = 0, 0
         len_neigh_u, len_neigh_v = len(neighbors_u), len(neighbors_v)
@@ -205,7 +207,7 @@ class DynamicInteractions:
             deg_ei = deg_u if condition else deg_v
 
             if first_id != second_id:
-                print("Computing EI (row 221)")
+                #print("Computing EI (row 221)")
                 sum_ei += DynamicInteractions.compute_ei(
                     vertex_ei.vertex_id,
                     v,
@@ -224,7 +226,7 @@ class DynamicInteractions:
                 else:
                     j += 1
             else:
-                print("Computing CI (row 240)")
+                #print("Computing CI (row 240)")
                 sum_ci += DynamicInteractions.compute_ci(
                     u,
                     v,
@@ -242,7 +244,7 @@ class DynamicInteractions:
         # Process i remaining neighbors of u
         while i < len_neigh_u:
             u_neighbour = neighbors_u[i]
-            print("Computing EI (row 258)")
+            #print("Computing EI (row 258)")
             #print(v)
             sum_ei += DynamicInteractions.compute_ei(
                 u_neighbour.vertex_id,
@@ -262,7 +264,7 @@ class DynamicInteractions:
         # Process j remaining neighbors of v
         while j < len_neigh_v:
             v_neighbour = neighbors_v[j]
-            print("Computing EI (row 277)")
+            #print("Computing EI (row 277)")
             sum_ei += DynamicInteractions.compute_ei(
                 v_neighbour.vertex_id,
                 u,
