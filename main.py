@@ -71,6 +71,8 @@ def main():
     df_graph_jaccard = graph_with_jaccard.get_graph_jaccard_dataframe(spark).rdd
     df_graph_degree = graph_with_jaccard.get_degree_dict()
 
+    #print("Graph with Jaccard:", df_graph_jaccard.take(1))
+
     rdd_graph_degree_broadcasted = sc.broadcast(df_graph_degree)
 
     # --------------------------------------------------------------------
@@ -115,7 +117,7 @@ def main():
 
         # df_star_graph = get_star_graph_dataframe(self.spark, rdd_star_graph)
         
-        # print(rdd_star_graph.collect())
+        #print(rdd_star_graph.collect())
 
         toc = time.time()
         time_generating_star_graph += toc - tic
@@ -134,20 +136,22 @@ def main():
             rdd_graph_degree_broadcasted,
         )
         
-        print(rdd_dynamic_interactions.collect())
+        #print(rdd_dynamic_interactions.take(1))
         
         toc = time.time()
         time_computing_dynamic_interactions += toc - tic
-        exit(0)
+        
         # --------------------------------------------------------------------
         # ----------------------- PHASE 2.3: Update Edges --------------------
         # --------------------------------------------------------------------
 
+        print("START updating edges")
         tic = time.time()
         update_edges =  MRUpdateEdges(spark)
-        rdd_updated_edges = update_edges.mapReduce(rdd_dynamic_interactions, args.tau, args.window_size)
+        rdd_updated_edges = update_edges.mapReduce(df_graph_jaccard, rdd_dynamic_interactions, args.tau, args.window_size)
         
-        print(rdd_updated_edges.take(5))
+        print(rdd_updated_edges.collect())
+        print("END updating edges")
         exit(0)
         toc = time.time()
         time_updating_edges += toc - tic

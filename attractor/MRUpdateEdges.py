@@ -253,26 +253,94 @@ class MRUpdateEdges:
         self.spark = spark_session
         self.sc = self.spark.sparkContext
 
-    def mapReduce(self, rdd_dynamic_interactions, tau_, window_size_) -> int:
+    def mapReduce(self, df_graph_jaccard, rdd_dynamic_interactions, tau_, window_size_) -> int:
         tau = tau_
         window_size = window_size_
 
-        def map_function(edge):
-            if edge.type == "L":
+        def map_function_jaccard(rdd_edge):
+            if rdd_edge.edge_type == "L":
                 pass
             else:
-                return (
-                    Row(center=edge.center, target=edge.target),
-                    Row(
-                        type=edge.type,
-                        weight=edge.weight,
-                    ),
-                )
+                center=rdd_edge.vertex_start
+                target=rdd_edge.vertex_end
+                type=rdd_edge.edge_type
+                weight=rdd_edge.distance
+                edge = (center, target)
+                spec = (type, weight)
+                return [
+                    Row(edge=edge, spec=spec)
+                    ]
+        def map_function_dynamic_interaction(rdd_edge):
+            if rdd_edge.type == "L":
+                pass
+            else:
+                center=rdd_edge.center
+                target=rdd_edge.target
+                type=rdd_edge.type
+                weight=rdd_edge.weight
+                edge = (center, target)
+                spec = (type, weight)
+                return [
+                    Row(edge=edge, spec=spec)
+                    ]
+            
+        def reduce_function(union_data):
+            # union_data is a list of Row (edge, spec)
+            delta_di = 0
+            delta_ei = 0
+            delta_ci = 0
+            delta_t = 0
+            dis_uv = -1
+            loop_index = 0
 
-        output = rdd_dynamic_interactions.map(map_function)
-        output = output.groupByKey()
+            for edge, spec in union_data:
+                u = edge.center
+                v = edge.target
 
-        return output
+                type = spec.type
+                weight = spec.weight
+
+                if type == "I":
+                    delta_t += weight
+                elif type == "G":
+                    dis_uv = weight
+                else:
+                    continue
+            
+            edge, spec = union_data
+
+            if dis_uv < 0:
+                return []
+            
+            if 0 < dis_uv < 1:
+                delta_t = updateDeltaWindow(edge, delta_t, loop_index, window_size, tau)
+
+            d_t_1 = dis_uv + delta_t
+            if d_t_1 > 1:
+                d_t_1 = 1.0
+            if d_t_1 < 0:
+                d_t_1 = 0.0
+
+        # edges is (center, target) or (u, v)
+        def updateDeltaWindow(edges, delta, cLoopRound, window_size, tau):
+
+            if cLoopRound >= (window_size - 1):
+                spec = Row(type="L", center=edges.center, target=edges.target, window_size=window_size)
+            else:
+                spec = Row(type="L", center=edges.center, target=edges.target, window_size=cLoopRound + 1)
+            return delta
+
+
+        df_graph_jaccard_mapped = df_graph_jaccard.flatMap(map_function_jaccard)
+        rdd_dynamic_interactions_mapped = rdd_dynamic_interactions.flatMap(map_function_dynamic_interaction)
+        union_output = df_graph_jaccard_mapped.union(rdd_dynamic_interactions_mapped)
+
+        return union_output
+
+        
+
+
+            
         # Validazione input
         # if main.DEBUG:
         #     assert len(input_files) == 4, "In case of DEBUG, there must be 4 input folders"

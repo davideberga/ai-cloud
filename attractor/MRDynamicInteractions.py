@@ -197,8 +197,6 @@ class MRDynamicInteractions:
                 
                 dictSumWeight[center] = sumWeight
 
-            print("dictSumWeight:", dictSumWeight)
-
             for edge in listEdges:
                 if edge.distance < 1 and edge.distance > 0:
                     deg_u = df_degree_broadcasted.value.get(edge.center, 0)
