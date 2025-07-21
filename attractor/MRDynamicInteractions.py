@@ -1,19 +1,11 @@
 from pyspark.sql import Row
-from pyspark.sql import SparkSession
-import logging
-from typing import List, Dict, Tuple
-from collections import defaultdict
-from args_parser import parse_arguments
+from typing import List, Tuple
 from attractor.DynamicInteractions import DynamicInteractions
 
 
 class MRDynamicInteractions:
-    def __init__(self, spark: SparkSession):
-        self.spark = spark
-        self.sc = spark.sparkContext
-        self.logger = logging.getLogger("LoopDynamicInteractions")
-
-    def mapReduce(self, rdd_star_graph, n_partition: int, _lambda_: float, df_degree_broadcasted):
+    @staticmethod
+    def mapReduce(rdd_star_graph, n_partition: int, _lambda_: float, df_degree_broadcasted):
         
         print("Compute Dynamic Interactions")
          

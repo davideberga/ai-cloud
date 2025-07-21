@@ -3,23 +3,15 @@ A star graph has a center and list of neighbors.
 We need to find G_{ijk} that a star graph belongs to so that we don't need to re-partition
 the star graph times to times.
 """
-
-import logging
 from typing import List, Tuple
-from pyspark.sql import SparkSession
 from pyspark.sql.dataframe import DataFrame
 from attractor.DynamicInteractions import DynamicInteractions
-
 
 class MRPreComputePartition:
     JOB_NAME = "PreComputePartition"
 
-    def __init__(self, spark_session: SparkSession):
-        self.spark = spark_session
-        self.sc = self.spark.sparkContext
-        self.logger = logging.getLogger(self.__class__.__name__)
-        
-    def mapReduce(self, rdd_edge_with_jaccard: DataFrame, n_partitions: int) -> int:
+    @staticmethod  
+    def mapReduce(rdd_edge_with_jaccard: DataFrame, n_partitions: int) -> int:
         print("Starting pre computation of partitions")
         
         n_partitions = int(n_partitions)

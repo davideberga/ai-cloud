@@ -2,23 +2,13 @@
 Generate star graphs from edges + pre-computed partitions.
 PySpark implementation of LoopGenStarGraphWithPrePartitions
 """
-import logging
-from pyspark.sql import SparkSession, Row
+from pyspark.sql import Row
 from pyspark.sql.types import *
 from pyspark.sql.functions import *
 
-
-# Setup logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger('LoopGenStarGraphWithPrePartitions.PySpark')
-
 class MRStarGraphWithPrePartitions:
-    def __init__(self, spark: SparkSession):
-        self.spark = spark
-        self.sc = spark.sparkContext
-        self.logger = logging.getLogger(self.__class__.__name__)
-
-    def mapReduce(self, df_graph_jaccard, df_partitioned, df_graph_degree):
+    @staticmethod
+    def mapReduce(df_graph_jaccard, df_partitioned, df_graph_degree):
         
         print("Start Star Graph Computation")
         

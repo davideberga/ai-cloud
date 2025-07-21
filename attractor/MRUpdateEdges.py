@@ -1,7 +1,3 @@
-import logging
-import traceback
-from typing import List, Tuple, Iterator
-from pyspark.sql import SparkSession
 from pyspark.sql.types import Row
 
 # class BitSet:
@@ -249,11 +245,8 @@ from pyspark.sql.types import Row
 
 
 class MRUpdateEdges:
-    def __init__(self, spark_session: SparkSession):
-        self.spark = spark_session
-        self.sc = self.spark.sparkContext
-
-    def mapReduce(self, df_graph_jaccard, rdd_dynamic_interactions, tau_, window_size_) -> int:
+    @staticmethod
+    def mapReduce(df_graph_jaccard, rdd_dynamic_interactions, tau_, window_size_) -> int:
         tau = tau_
         window_size = window_size_
     

@@ -81,7 +81,7 @@ def main():
 
     tic_pre_partition = time.time()
 
-    partition_computer = MRPreComputePartition(spark)
+    partition_computer = MRPreComputePartition()
     df_partitioned = partition_computer.mapReduce(
         df_graph_jaccard, args.num_partitions
     )
@@ -110,7 +110,7 @@ def main():
 
         tic = time.time()
         # Generate star graph with pre-partitions
-        star_graph = MRStarGraphWithPrePartitions(spark)
+        star_graph = MRStarGraphWithPrePartitions()
         rdd_star_graph = star_graph.mapReduce(
             df_graph_jaccard, df_partitioned, rdd_graph_degree_broadcasted
         )
@@ -128,7 +128,7 @@ def main():
 
         tic = time.time()
         
-        dynamic_interactions = MRDynamicInteractions(spark)
+        dynamic_interactions = MRDynamicInteractions()
         rdd_dynamic_interactions = dynamic_interactions.mapReduce(
             rdd_star_graph,
             args.num_partitions,
@@ -147,7 +147,7 @@ def main():
 
         print("START updating edges")
         tic = time.time()
-        update_edges =  MRUpdateEdges(spark)
+        update_edges =  MRUpdateEdges()
         rdd_updated_edges = update_edges.mapReduce(df_graph_jaccard, rdd_dynamic_interactions, args.tau, args.window_size)
         
         print(rdd_updated_edges.collect())
