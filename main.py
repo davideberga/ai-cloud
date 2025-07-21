@@ -5,6 +5,7 @@ from attractor import GraphUtils
 from attractor.GraphUtils import GraphUtils
 from pyspark.sql import SparkSession
 from attractor.MyUtil import MyUtil
+from attractor.CleanUp import CleanUp
 from attractor.MRStarGraphWithPrePartitions import (
     MRStarGraphWithPrePartitions,
 )
@@ -95,12 +96,12 @@ def main():
     # ---------------------- END compute partitions ----------------------
     # --------------------------------------------------------------------
 
-    using_sliding_window = int(args.window_size) > 0
-
     flag = True
-    cnt_round = 0
+    
     prev_converged_edges_file = ""
     tic = time.time()
+    
+    iterations_counter = 0
 
     while flag:
         
@@ -110,8 +111,7 @@ def main():
 
         tic = time.time()
         # Generate star graph with pre-partitions
-        star_graph = MRStarGraphWithPrePartitions()
-        rdd_star_graph = star_graph.mapReduce(
+        rdd_star_graph = MRStarGraphWithPrePartitions.mapReduce(
             df_graph_jaccard, df_partitioned, rdd_graph_degree_broadcasted
         )
 
@@ -128,8 +128,7 @@ def main():
 
         tic = time.time()
         
-        dynamic_interactions = MRDynamicInteractions()
-        rdd_dynamic_interactions = dynamic_interactions.mapReduce(
+        rdd_dynamic_interactions = MRDynamicInteractions.mapReduce(
             rdd_star_graph,
             args.num_partitions,
             args.lambda_,
@@ -147,108 +146,22 @@ def main():
 
         print("START updating edges")
         tic = time.time()
-        update_edges =  MRUpdateEdges()
-        rdd_updated_edges = update_edges.mapReduce(df_graph_jaccard, rdd_dynamic_interactions, args.tau, args.window_size)
+        rdd_updated_edges = MRUpdateEdges.mapReduce(df_graph_jaccard, rdd_dynamic_interactions, args.tau, args.window_size, iterations_counter)
         
-        print(rdd_updated_edges.collect())
-        print("END updating edges")
-        exit(0)
-        toc = time.time()
-        time_updating_edges += toc - tic
-
-        # Riduzione degli archi
-        if REDUCED_EDGE:
-
-            print(f"Reducing the number of edges @Loops: {cnt_round + 1}")
-            info = reduce_edges(
-                args.num_vertices,
-                curr_edge_folder,
-                local_filesystem,
-                None,
-                reduced_local_edge_file,
-                current_left_edges_file,
-                prev_converged_edges_file,
-            )
-
-            converged_edges, non_converged_edges, used_next_round_edges = info
-            prev_converged_edges_file = current_left_edges_file
-            curr_edge_folder = reduced_edges_folder
-
-            # Tempo per questa iterazione
-            ending_this_iteration_toc = time.time()
-            length_each_iteration = (
-                ending_this_iteration_toc - starting_iteration_tic
-            )
-
-            # Controlla se passare alla modalità single machine
-            if non_converged_edges <= threshold_used_edges:
-                tic_single_machine = time.time()
-                dynamic_time_mr = (tic_single_machine - tic) * 1000
-
-                # Esegui attractor su singola macchina
-                single_machine_attractor = CommunityDetection(
-                    int(args.windows_size),
-                    float(args.tau),
-                    float(args.lambda_),
-                    cnt_round,
-                    args.num_vertices,
-                )
+        
+        # Actual execution of the 3 phases of MapReduce
+        updated_edges = rdd_updated_edges.collect()
+        converged, non_converged, continued = CleanUp.reduce_edges(args.num_vertices, updated_edges)
+        
+        print(converged, non_converged, continued)
+        
+        if(non_converged <= args.gamma):
+            print("PD")
             
-                tic_single_machine = time.time()
-
-                single_machine_attractor.execute(
-                    reduced_local_edge_file_normal,
-                    merged_sliding_windows_file_normal,
-                )
-
-                prev_converged_edges_file = merged_all_converged_edges
-                validate_final_edges(merged_all_converged_edges, args.num_edges)
-
-                toc_single_machine = time.time()
-                time_running_on_single_machine += (
-                    toc_single_machine - tic_single_machine
-                )
-                flag = False
-            else:
-                # Copia il file ridotto su HDFS
-                pass
-
-        # Controlla se continuare
-        if flag and MyUtil.path_exists(f"{out_update_edge}/flag"):
-            flag = True
-        else:
-            print("MrAttractor-Hoi-Tu-Roi!!!!! Oh yeah")
-            print(f"No-of-Loops: {cnt_round + 1}")
-            toc = time.time()
-            dynamic_time = int((toc - tic) * 1000)
-            print(
-                f"Total Running Time of Dynamic Interactions (single + MR) (seconds): {(toc - tic)}"
-            )
-
-            # BFS per trovare comunità
-            tic = time.time()
-            final_edge_file = prev_converged_edges_file
-            toc = time.time()
-            copying_time = int((toc - tic) * 1000)
-
-            # Esegui BFS
-            tic = time.time()
-            breadth_first_search(final_edge_file, N, outfile)
-
-            toc = time.time()
-            breath_first_search_time = int((toc - tic) * 1000)
-
-            three_phases = (
-                initialization_time
-                + dynamic_time
-                + breath_first_search_time
-                + copying_time
-                + pre_compute_partition_time
-                + find_workload_balancing_time
-            )
-            break
-
-        cnt_round += 1
+        
+        
+        
+    
 
     if spark:
         spark.stop()

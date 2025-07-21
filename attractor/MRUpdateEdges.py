@@ -1,323 +1,140 @@
 from pyspark.sql.types import Row
-
-# class BitSet:
-#     """Implementazione semplice di BitSet per simulare il comportamento Java"""
-
-#     def __init__(self, size: int = 32):
-#         self.size = size
-#         self.bits = [False] * size
-
-#     def set(self, index: int):
-#         """Imposta il bit all'indice specificato"""
-#         if 0 <= index < self.size:
-#             self.bits[index] = True
-
-#     def clear(self, index: int):
-#         """Pulisce il bit all'indice specificato"""
-#         if 0 <= index < self.size:
-#             self.bits[index] = False
-
-#     def get(self, index: int) -> bool:
-#         """Ottiene il valore del bit all'indice specificato"""
-#         if 0 <= index < self.size:
-#             return self.bits[index]
-#         return False
-
-#     def cardinality(self) -> int:
-#         """Restituisce il numero di bit impostati a True"""
-#         return sum(self.bits)
-
-# class LoopUpdateEdgesMapper:
-#     """Mapper class per LoopUpdateEdges"""
-
-#     def __init__(self):
-#         self.logger = logging.getLogger(self.__class__.__name__)
-
-#     def setup(self, context):
-#         """Setup del mapper"""
-#         pass
-
-#     def map(self, key: SpecialEdgeTypeWritable, value, context) -> Iterator[Tuple[PairWritable, SpecialEdgeValueWritable]]:
-#         """
-#         Funzione map. Input: SpecialEdgeTypeWritable, Output: (PairWritable, SpecialEdgeValueWritable)
-#         """
-#         try:
-#             # Verifica che il tipo sia valido
-#             valid_types = [Settings.C_TYPE, Settings.D_TYPE, Settings.E_TYPE,
-#                           Settings.EDGE_TYPE, Settings.INTERACTION_TYPE, Settings.SLIDING]
-#             assert key.type in valid_types, f"Invalid key type: {key.type}"
-
-#             edge = PairWritable()
-#             edge.set(key.center, key.target)
-
-#             spec = SpecialEdgeValueWritable()
-#             if key.type == Settings.SLIDING:
-#                 spec.init(key.type, key.weight, key.no_bits, key.sliding)
-#             else:
-#                 spec.init(key.type, key.weight, -1, None)
-
-#             yield edge, spec
-
-#         except Exception as e:
-#             self.logger.error(f"{main.prefix_log}{traceback.format_exc()}")
-#             raise e
-
-
-# class LoopUpdateEdgesCombiner:
-#     """Combiner class per LoopUpdateEdges"""
-
-#     def setup(self, context):
-#         """Setup del combiner"""
-#         pass
-
-#     def reduce(self, key: PairWritable, values: List[SpecialEdgeValueWritable], context) -> Iterator[Tuple[PairWritable, SpecialEdgeValueWritable]]:
-#         """Funzione reduce del combiner"""
-#         weight = 0.0
-#         contain_interactions = False
-#         other_values = []
-
-#         for s in values:
-#             if s.type == Settings.INTERACTION_TYPE:
-#                 weight += s.value
-#                 contain_interactions = True
-#             else:
-#                 other_values.append(s)
-
-#         # Emetti tutti i valori non-interaction
-#         for val in other_values:
-#             yield key, val
-
-#         # Se ci sono interazioni, emetti il totale
-#         if contain_interactions:
-#             spec = SpecialEdgeValueWritable()
-#             spec.init(Settings.INTERACTION_TYPE, weight, -1, None)
-#             yield key, spec
-
-#     def cleanup(self, context):
-#         """Cleanup del combiner"""
-#         pass
-
-
-# class LoopUpdateEdgesReducer:
-#     """Reducer class per LoopUpdateEdges"""
-
-#     def __init__(self):
-#         self.logger = logging.getLogger(self.__class__.__name__)
-#         self.mout = None
-#         self.PRECISE = 0.0000001
-#         self.round = ""
-#         self.threshold = -1
-#         self.window_size = -1
-#         self.loop_index = 0
-
-#     def setup(self, context, output_path: str, round_num: str, threshold: float, window_size: int):
-#         """Setup del reducer"""
-#         self.mout = MultipleOutputs(output_path)
-#         self.round = round_num
-#         self.threshold = threshold
-#         self.window_size = window_size
-#         self.loop_index = int(round_num)
-
-#     def update_delta_window(self, key: PairWritable, delta: float, c_loop_round: int,
-#                            window_size: int, delta_window: BitSet, threshold: float) -> float:
-#         """
-#         Aggiorna la finestra delta
-#         """
-#         # c_loop_round inizializzato a zero
-#         index = c_loop_round % window_size
-
-#         if delta < 0:
-#             delta_window.clear(index)
-#         else:
-#             delta_window.set(index)
-
-#         returned_delta = delta
-
-#         if c_loop_round >= (window_size - 1):
-#             # Scrivi il bitset completo
-#             spec = SpecialEdgeTypeWritable()
-#             spec.init(Settings.SLIDING, key.left, key.right, -1, -1, None, window_size, delta_window)
-#             self.mout.write("updateEdge", spec, "NullWritable", "sliding/sliding")
-
-#             # La finestra è piena ora
-#             if delta_window.get(index):
-#                 i_same_size = delta_window.cardinality()
-#                 if i_same_size > threshold * window_size:
-#                     returned_delta = 2
-#             else:
-#                 i_same_size = window_size - delta_window.cardinality()
-#                 if i_same_size > threshold * window_size:
-#                     returned_delta = -2
-#         else:
-#             # Scrivi da 0 a current_index del bitset
-#             spec = SpecialEdgeTypeWritable()
-#             spec.init(Settings.SLIDING, key.left, key.right, -1, -1, None, c_loop_round + 1, delta_window)
-#             self.mout.write("updateEdge", spec, "NullWritable", "sliding/sliding")
-
-#         return returned_delta
-
-#     def reduce(self, key: PairWritable, values: List[SpecialEdgeValueWritable], context):
-#         """Funzione reduce principale"""
-#         try:
-#             u = key.left
-#             v = key.right
-
-#             using_sliding_windows = self.window_size > 0
-
-#             delta_di = 0.0
-#             delta_ei = 0.0
-#             delta_ci = 0.0
-#             delta_t = 0.0
-#             dis_uv = -1.0
-#             exist_delta_t = False
-
-#             # Solo per delta window
-#             b_delta_window = BitSet(32)  # inizializza un set di 32 bit
-
-#             for s in values:
-#                 if s.type == Settings.EDGE_TYPE:
-#                     dis_uv = s.value
-#                 elif s.type == Settings.SLIDING:
-#                     # inizializza b_delta_window
-#                     for i in range(s.no_bits + 1):
-#                         if s.sliding.get(i):
-#                             b_delta_window.set(i)
-#                     continue
-#                 elif s.type == Settings.D_TYPE:
-#                     delta_di += s.value
-#                 elif s.type == Settings.C_TYPE:
-#                     delta_ci += s.value
-#                 elif s.type == Settings.E_TYPE:
-#                     delta_ei += s.value
-#                 elif s.type == Settings.INTERACTION_TYPE:
-#                     delta_t += s.value
-#                     exist_delta_t = True
-
-#             # VALIDAZIONE DEL CODICE
-#             if main.DEBUG:
-#                 # Se DEBUG, la somma di DI, CI, EI deve essere uguale a delta_t
-#                 assert abs(delta_t - (delta_di + delta_ci + delta_ei)) <= 1e-5, \
-#                     "Sum of DI, CI, EI must equal to delta_t"
-#             else:
-#                 assert abs(delta_di) < 1e-5 and abs(delta_ci) < 1e-5 and abs(delta_ei) < 1e-5, \
-#                     "DI, CI, EI must be zero if not debugged"
-
-#             if dis_uv < 0:
-#                 return
-
-#             if 0 < dis_uv < 1:
-#                 assert exist_delta_t, f"With non-converged edge ({u},{v}), there must be delta to update!!!"
-#                 if using_sliding_windows:
-#                     delta_t = self.update_delta_window(key, delta_t, self.loop_index,
-#                                                      self.window_size, b_delta_window, self.threshold)
-#             else:
-#                 assert not exist_delta_t, f"With converged edge ({u},{v}), there is no delta emitted!!!"
-
-#             d_t_1 = dis_uv + delta_t
-
-#             if d_t_1 > 1:
-#                 d_t_1 = 1.0
-#             if d_t_1 < 0:
-#                 d_t_1 = 0.0
-
-#             if main.DEBUG:
-#                 test = f",oldDis: {dis_uv:.8f}, newDis: {d_t_1:.8f}, DI: {delta_di:.8f}, EI: {delta_ei:.8f}, CI: {delta_ci:.8f}"
-#                 self.mout.write("testing", key, test, f"test/test_DI_CI_EI_{self.round}")
-
-#             if 0 < d_t_1 < 1:
-#                 self.mout.write("signal", "Flag", "", "flag/flag")
-
-#             spec = SpecialEdgeTypeWritable()
-#             spec.init(Settings.EDGE_TYPE, key.left, key.right, d_t_1, -1, None, -1, None)
-#             self.mout.write("updateEdge", spec, "NullWritable", "edges/edges")
-
-#         except Exception as e:
-#             self.logger.error(f"{main.prefix_log}{traceback.format_exc()}")
-#             raise e
-#         except AssertionError as e:
-#             self.logger.error(f"{main.prefix_log}{traceback.format_exc()}")
-#             raise e
-
-#     def cleanup(self, context):
-#         """Cleanup del reducer"""
-#         if self.mout:
-#             self.mout.close()
+import numpy as np
 
 
 class MRUpdateEdges:
     @staticmethod
-    def mapReduce(df_graph_jaccard, rdd_dynamic_interactions, tau_, window_size_) -> int:
+    def mapReduce(
+        df_graph_jaccard,
+        rdd_dynamic_interactions,
+        tau_,
+        window_size_,
+        iterations_counter_,
+    ) -> int:
         tau = tau_
         window_size = window_size_
-    
-        df_graph_jaccard_mapped = df_graph_jaccard.flatMap(MRUpdateEdges.map_function)
-        rdd_dynamic_interactions_mapped = rdd_dynamic_interactions.flatMap(MRUpdateEdges.map_function)
-        union_output = df_graph_jaccard_mapped.union(rdd_dynamic_interactions_mapped)
+        iterations_counter = iterations_counter_
+
+        rdd_dynamic_interactions = df_graph_jaccard.union(rdd_dynamic_interactions)
+        union_output = rdd_dynamic_interactions.map(MRUpdateEdges.map_function)
+        union_output = union_output.groupByKey()
+        union_output = union_output.flatMap(MRUpdateEdges.combiner)
+        union_output = union_output.groupByKey()
+        union_output = union_output.map(
+            lambda x: MRUpdateEdges.reduce_function(
+                x, tau, window_size, iterations_counter
+            )
+        )
 
         return union_output
-        
+
     @staticmethod
     def map_function(rdd_edge):
-        
-        edge_type = getattr(rdd_edge, "edge_type", None) or getattr(rdd_edge, "type", None)
-        
-        if edge_type == "L":
-            return []
+        edge_type = getattr(rdd_edge, "edge_type", None) or getattr(
+            rdd_edge, "type", None
+        )
 
-        center = getattr(rdd_edge, "vertex_start", None) or getattr(rdd_edge, "center", None)
-        target = getattr(rdd_edge, "vertex_end", None) or getattr(rdd_edge, "target", None)
-        weight = getattr(rdd_edge, "distance", None) or getattr(rdd_edge, "weight", None)
+        center = getattr(rdd_edge, "vertex_start", None) or getattr(
+            rdd_edge, "center", None
+        )
+        target = getattr(rdd_edge, "vertex_end", None) or getattr(
+            rdd_edge, "target", None
+        )
+        weight = getattr(rdd_edge, "distance", None) or getattr(
+            rdd_edge, "weight", None
+        )
         type_ = edge_type
 
-        edge = (center, target)
-        spec = (type_, weight)
+        edge = Row(center=center, target=target)
 
-        return [Row(edge=edge, spec=spec)]
-    
+        if edge_type == "L":
+            spec = Row()
+        else:
+            spec = Row(type=type_, weight=weight)
+
+        return (edge, spec)
+
     @staticmethod
-    def reduce_function(union_data, tau, window_size):
+    def combiner(edge_with_updates):
+        weight = 0
+        containInteractions = False
+        result = []
+
+        for update in edge_with_updates[1]:
+            if update.type == "I":
+                weight += update.weight
+                containInteractions = True
+            else:
+                result.append((edge_with_updates[0], update))
+
+        if containInteractions:
+            spec = Row(type="I", weight=weight)
+            result.append((edge_with_updates[0], spec))
+
+        return result
+
+    @staticmethod
+    def reduce_function(union_data, tau, window_size, interations_counter):
         # union_data is a list of Row (edge, spec)
-        delta_di = 0
-        delta_ei = 0
-        delta_ci = 0
+        edge, updates = union_data
+
         delta_t = 0
         dis_uv = -1
-        loop_index = 0
 
-        for edge, spec in union_data:
-            u = edge.center
-            v = edge.target
+        existDeltat = False
+        
+        deltaWindow = np.zeros((32), dtype=np.bool)
 
-            type = spec.type
-            weight = spec.weight
-
-            if type == "I":
-                delta_t += weight
-            elif type == "G":
+        for update in updates:
+            
+            type = update.type
+            weight = update.weight
+            
+            if type == "G":
                 dis_uv = weight
-            else:
-                continue
+            elif type == "I":
+                delta_t += weight
+                existDeltat = True
+            elif type == "L":
+                # TODO nBits
+                # TODO delta
+                raise UnicodeDecodeError("Missing nBits, delta window")
+                pass
         
-        edge, spec = union_data
-
-        if dis_uv < 0:
-            return []
+        if dis_uv < 0: return Row()
         
-        if 0 < dis_uv < 1:
-            delta_t = MRUpdateEdges.updateDeltaWindow(edge, delta_t, loop_index, window_size, tau)
+        if dis_uv < 1 and dis_uv > 0: 
+            delta_t = MRUpdateEdges.updateDeltaWindow(edge, delta_t, interations_counter, window_size, deltaWindow, tau)
 
         d_t_1 = dis_uv + delta_t
         if d_t_1 > 1:
             d_t_1 = 1.0
         if d_t_1 < 0:
             d_t_1 = 0.0
+            
+        return Row(type="G", center=edge.center, target=edge.target, weight=d_t_1)
 
-    # edges is (center, target) or (u, v)
+
     @staticmethod
-    def updateDeltaWindow(edges, delta, cLoopRound, window_size, tau):
-
-        if cLoopRound >= (window_size - 1):
-            spec = Row(type="L", center=edges.center, target=edges.target, window_size=window_size)
+    def updateDeltaWindow(edge, delta, interations_counter, window_size, deltaWindow, tau):
+        index = interations_counter % window_size
+        deltaWindow[index] = bool(delta >= 0)
+        
+        returnedDelta = delta
+        if interations_counter >= (window_size -1):
+            if deltaWindow[index]:
+                sameSize = np.sum(deltaWindow)
+                if sameSize > tau * window_size: 
+                    returnedDelta = 2
+            else:
+                sameSize = window_size - np.sum(deltaWindow)
+                if sameSize > tau * window_size: 
+                    returnedDelta = -2
         else:
-            spec = Row(type="L", center=edges.center, target=edges.target, window_size=cLoopRound + 1)
-        return delta
+            pass
+        
+        return returnedDelta
+            
+    
+            
+        
