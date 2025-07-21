@@ -85,7 +85,7 @@ def main():
     df_partitioned = partition_computer.mapReduce(
         df_graph_jaccard, args.num_partitions
     )
-    # print(df_partitioned.collect())
+    #print(df_partitioned.collect())
     # df_partitioned = get_partitioned_dataframe(self.spark, partitioned)
     
     toc_pre_partition = time.time()
@@ -136,7 +136,7 @@ def main():
             rdd_graph_degree_broadcasted,
         )
         
-        #print(rdd_dynamic_interactions.take(1))
+        #print(rdd_dynamic_interactions.take(5))
         
         toc = time.time()
         time_computing_dynamic_interactions += toc - tic
