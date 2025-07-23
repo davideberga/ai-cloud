@@ -22,11 +22,11 @@ class MRStarGraphWithPrePartitions:
 
     @staticmethod
     def mapReduce(df_graph_jaccard, df_partitioned, df_graph_degree):
+        df_graph_jaccard = df_graph_jaccard.flatMap(MRStarGraphWithPrePartitions.both_directions)
         rdd_mapped = df_graph_jaccard.union(df_partitioned)
         rdd_mapped = rdd_mapped.reduceByKey(MRStarGraphWithPrePartitions.aggregate_comb)
         
-        print(rdd_mapped.take(5))
-        exit(0)
+        
 
         result_rdd = rdd_mapped.flatMap(
             lambda a: MRStarGraphWithPrePartitions.reduce_function(
@@ -35,6 +35,10 @@ class MRStarGraphWithPrePartitions:
         )
 
         return result_rdd
+    
+    @staticmethod
+    def both_directions(row):
+        return [row, (row[1][0]['target'], [{'type': 'G', 'target': row[0] , 'weight': row[1][0]['weight']}])]
 
     # input: vertex_id is the id of the certal node of the star graph
     # output: list of rows with center, neighbors, and triplets
