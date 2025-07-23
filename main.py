@@ -72,7 +72,6 @@ def main():
     graph_initilizer = GraphUtils(args.num_vertices)
     graph_with_jaccard: Graph = graph_initilizer.init_jaccard(args.graph_file)
     df_graph_jaccard = graph_with_jaccard.get_graph_jaccard_dataframe(spark)
-    rdd_graph_jaccard = df_graph_jaccard.rdd
     df_graph_degree = graph_with_jaccard.get_degree_dict()
 
     #print("Graph with Jaccard:", df_graph_jaccard.take(1))
@@ -87,7 +86,7 @@ def main():
 
     partition_computer = MRPreComputePartition()
     df_partitioned = partition_computer.mapReduce(
-        rdd_graph_jaccard, args.num_partitions
+        df_graph_jaccard, args.num_partitions
     )
     #print(df_partitioned.collect())
     # df_partitioned = get_partitioned_dataframe(self.spark, partitioned)
@@ -113,7 +112,7 @@ def main():
         tic = time.time()
         # Generate star graph with pre-partitions
         rdd_star_graph = MRStarGraphWithPrePartitions.mapReduce(
-            rdd_graph_jaccard, df_partitioned, rdd_graph_degree_broadcasted
+            df_graph_jaccard, df_partitioned, rdd_graph_degree_broadcasted
         )
 
         # df_star_graph = get_star_graph_dataframe(self.spark, rdd_star_graph)
@@ -149,12 +148,15 @@ def main():
 
         print("START updating edges")
         tic = time.time()
-        rdd_updated_edges = MRUpdateEdges.mapReduce(rdd_graph_jaccard, rdd_dynamic_interactions, args.tau, args.window_size, iterations_counter)
+        rdd_updated_edges = MRUpdateEdges.mapReduce(df_graph_jaccard, rdd_dynamic_interactions, args.tau, args.window_size, iterations_counter)
 
         
+        start_spark_execution = time.time()
         # Actual execution of the 3 phases of MapReduce
         updated_edges = rdd_updated_edges.collect()
         #print("Updated edges:", updated_edges)
+        
+        print(f" >>> Total time iteration {round(time.time() - start_spark_execution , 3)} s <<< ")
         
         toc = time.time()
         time_updating_edges += toc - tic

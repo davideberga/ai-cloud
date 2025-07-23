@@ -205,8 +205,6 @@ class Graph:
         return vertex_start, vertex_end
     
     def get_graph_jaccard_dataframe(self, spark: SparkSession) -> DataFrame:
-        
-        schema = DataframeSchemaProvider.get_schema_graph_jaccard()
         edges_data = []
         edges = self.get_all_edges()
         
@@ -214,15 +212,11 @@ class Graph:
              
             vertex_start, vertex_end = Graph.from_key_to_vertex(edge_key)
             
-            edge_record = Row(
-                edge_type=str(EdgeTypeEnum.G.value),
-                begin_vertex=vertex_start,
-                end_vertex=vertex_end,
-                weight=edge_value.weight,
-            )
-            edges_data.append(edge_record)
+            edges_data.append((vertex_start, [{"type": "G", "target": vertex_end, "weight": edge_value.weight}]))
+            edges_data.append((vertex_end, [{"type": "G", "target": vertex_start, "weight": edge_value.weight}]))
         
-        return spark.createDataFrame(edges_data, schema)
+        
+        return spark.sparkContext.parallelize(edges_data)
     
     def get_degree_dict(self) -> Dict[int, int]:
         vertices_degree = { }

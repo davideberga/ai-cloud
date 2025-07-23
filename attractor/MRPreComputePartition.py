@@ -8,7 +8,6 @@ from pyspark.sql.dataframe import DataFrame
 from attractor.DynamicInteractions import DynamicInteractions
 
 class MRPreComputePartition:
-    JOB_NAME = "PreComputePartition"
 
     @staticmethod  
     def mapReduce(rdd_edge_with_jaccard: DataFrame, n_partitions: int) -> int:
@@ -29,7 +28,7 @@ class MRPreComputePartition:
     @staticmethod
     def map_function(edge_data, n_partitions) -> List[Tuple[int, Tuple[int, int, int]]]:
 
-        u, v  = edge_data.center, edge_data.target
+        u, v  = edge_data[0], edge_data[1][0]["target"]
         hash_u = DynamicInteractions.node2hash(u, n_partitions)
         hash_v = DynamicInteractions.node2hash(v, n_partitions)
         
@@ -66,4 +65,4 @@ class MRPreComputePartition:
             triple_string = f"{i} {j} {k}"
             triples_data.append(triple_string)
 
-        return ("S", vertex, len(triples_data), triples_data)
+        return (vertex, [{"type": "S", "triplets": triples_data}])
