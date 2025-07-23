@@ -76,10 +76,10 @@ def main():
     rdd_graph_jaccard = df_graph_jaccard.rdd
     df_graph_degree = graph_with_jaccard.get_degree_dict()
 
-    #print("Graph with Jaccard:", df_graph_jaccard.take(1))
-
+    #print("Graph with Jaccard:", df_graph_jaccard.collect())
+    #print("Graph with Degree:", df_graph_degree)
     rdd_graph_degree_broadcasted = sc.broadcast(df_graph_degree)
-
+    
     # --------------------------------------------------------------------
     # ---------------------- START compute partitions --------------------
     # --------------------------------------------------------------------
@@ -152,7 +152,6 @@ def main():
         tic = time.time()
         rdd_updated_edges = MRUpdateEdges.mapReduce(rdd_graph_jaccard, rdd_dynamic_interactions, args.tau, args.window_size, iterations_counter)
 
-        
         # Actual execution of the 3 phases of MapReduce
         updated_edges = rdd_updated_edges.collect()
         #print("Updated edges:", updated_edges)
@@ -169,7 +168,6 @@ def main():
 
         df_reduced_edges = get_reduced_edges_dataframe(spark, reduced_edges)
 
-        #print(df_reduced_edges.take(5))
         print(converged, non_converged, continued)
 
         flag = not (non_converged == 0)
@@ -179,15 +177,13 @@ def main():
         if flag == False:
             toc_main = time.time()
             print("Total time main:", round(toc_main - tic_main, 3), "s")
-        # if counter == 2:
-        #     break
+
     # --------------------------------------------------------------------
     # ----------------------- PHASE 3: Community Detection ---------------
     # --------------------------------------------------------------------
-
-    print(df_reduced_edges.collect())
+    print("START Community Detection")
     communities = breadth_first_search(reduced_edges, args.num_vertices)
-
+    print("Communities:", communities)
     if spark:
         spark.stop()
         print("SparkSession and SparkContext stopped")

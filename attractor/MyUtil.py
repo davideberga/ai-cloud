@@ -66,7 +66,7 @@ def breadth_first_search(output_second_phase, num_vertices):
                     comms[adj] = ID
                     queue.append(adj)
 
-        for i in range(num_vertices):
-            print(f"{i + 1} {comms[i]}")
+    # for i in range(num_vertices):
+    #     print(f"{i + 1} {comms[i]}")
         
-        return comms
+    return comms

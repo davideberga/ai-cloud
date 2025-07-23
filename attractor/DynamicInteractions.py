@@ -40,6 +40,7 @@ class DynamicInteractions:
         n_partitions: int,
     ) -> float:
         assert 0 < dis_u_v < 1 # This arc is already convergent
+
         w1 = 1 - dis_u_c
         w2 = 1 - dis_v_c
         ci = -w2 * math.sin(w1) / deg_u - w1 * math.sin(w2) / deg_v
@@ -146,9 +147,10 @@ class DynamicInteractions:
     def compute_di(
         u: int, v: int, n_partitions: int, distance_u_v: float, deg_u: int, deg_v: int
     ) -> float:
-        #print("Computing DI")
+        
         assert n_partitions >= 3
         assert 0 < distance_u_v < 1
+
         di = -math.sin(1 - distance_u_v) / deg_u - math.sin(1 - distance_u_v) / deg_v
         p_u = DynamicInteractions.node2hash(u, n_partitions)
         p_v = DynamicInteractions.node2hash(v, n_partitions)
@@ -183,6 +185,7 @@ class DynamicInteractions:
 
         di = DynamicInteractions.compute_di(u, v, n_partitions, duv, deg_u, deg_v)
 
+
         while i < len_neigh_u and j < len_neigh_v:
             first = neighbors_u[i]
             second = neighbors_v[j]
@@ -202,31 +205,37 @@ class DynamicInteractions:
                 and p_second in partition_name_splitted
             ) # There is a rear edge
 
-            condition = first_id < second_id
-            vertex_ei = first if condition else second
-            deg_ei = deg_u if condition else deg_v
-
-            if first_id != second_id:
-                #print("Computing EI (row 221)")
+            if first_id < second_id:
                 sum_ei += DynamicInteractions.compute_ei(
-                    vertex_ei.vertex_id,
+                    first_id,
                     v,
                     u,
-                    vertex_ei.weight,
+                    first.weight,
                     duv,
-                    deg_ei,
+                    deg_u,
                     n_partitions,
                     adjListDictForExclusive,
                     dictSumWeight,
                     lambda_,
                     partition_name_splitted,
                 )
-                if condition:
-                    i += 1
-                else:
-                    j += 1
+                i += 1
+            elif second_id < first_id:
+                sum_ei += DynamicInteractions.compute_ei(
+                    second_id,
+                    u,
+                    v,
+                    second.weight,
+                    duv,
+                    deg_v,
+                    n_partitions,
+                    adjListDictForExclusive,
+                    dictSumWeight,
+                    lambda_,
+                    partition_name_splitted,
+                )
+                j += 1
             else:
-                #print("Computing CI (row 240)")
                 sum_ci += DynamicInteractions.compute_ci(
                     u,
                     v,
@@ -244,8 +253,7 @@ class DynamicInteractions:
         # Process i remaining neighbors of u
         while i < len_neigh_u:
             u_neighbour = neighbors_u[i]
-            #print("Computing EI (row 258)")
-            #print(v)
+            
             sum_ei += DynamicInteractions.compute_ei(
                 u_neighbour.vertex_id,
                 v,
@@ -264,7 +272,6 @@ class DynamicInteractions:
         # Process j remaining neighbors of v
         while j < len_neigh_v:
             v_neighbour = neighbors_v[j]
-            #print("Computing EI (row 277)")
             sum_ei += DynamicInteractions.compute_ei(
                 v_neighbour.vertex_id,
                 u,
