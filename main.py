@@ -146,6 +146,8 @@ def main():
         rdd_updated_edges, sliding_data = MRUpdateEdges.mapReduce(rdd_graph_jaccard, rdd_dynamic_interactions, args.tau, args.window_size, counter, previousSlidingWindow)
 
         # Actual execution of the 3 phases of MapReduce
+        start_spark_execution = time.time()
+        # Actual execution of the 3 phases of MapReduce
         updated_edges = rdd_updated_edges.collect()
         dict_sliding = {}
 
@@ -153,6 +155,10 @@ def main():
             dict_sliding[edge] = sliding
 
         previousSlidingWindow = sc.broadcast(dict_sliding)
+        
+        print(f" >>> Total time iteration {round(time.time() - start_spark_execution , 3)} s <<< ")
+        
+        #print("Updated edges:", updated_edges)
         
         toc = time.time()
         time_updating_edges += toc - tic
