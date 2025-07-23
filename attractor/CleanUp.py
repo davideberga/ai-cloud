@@ -9,8 +9,7 @@ class CleanUp:
 ):
         dirty = np.zeros((n_vertices))
         non_converged = 0
-        converged=0
-        
+        converged = 0
         
         for row in output_update_edges:
             u = row.center
@@ -46,7 +45,7 @@ class CleanUp:
             else:
                 pass
         
-        return converged, non_converged, the_number_of_continued_to_used_edges
+        return converged, non_converged, the_number_of_continued_to_used_edges, output_update_edges
 
     def validate_final_edges(self, file1, no_original_edges):
         cnt = 0

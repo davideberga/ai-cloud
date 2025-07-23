@@ -99,7 +99,7 @@ class CommunityDetection_v2:
             numerator = float(c)
             denominator = float(deg_u + deg_v + 2 - c)
             distance = 1.0 - numerator / denominator
-            edge_value.distance = distance
+            edge_value.weight = distance
             
             # Update edge and vertex weights
             self.graph.update_edge(begin, end, distance, self.current_step)
@@ -116,7 +116,7 @@ class CommunityDetection_v2:
         if Settings.DEBUG:
             with open("distance_init_out", 'w') as distance_init_out:
                 for edge_key, edge_value in edges.items():
-                    distance = edge_value.distance
+                    distance = edge_value.weight
                     parts = edge_key.split()
                     begin = int(parts[0])
                     end = int(parts[1])
@@ -194,7 +194,7 @@ class CommunityDetection_v2:
                     dd_di, dd_ei, dd_ci = d_di, d_ei, d_ci
                     
                     if abs(delta) > Settings.PRECISE:
-                        new_distance = self.graph.distance(begin, end, self.current_step) + delta
+                        new_distance = self.graph.weight(begin, end, self.current_step) + delta
                         
                         # Clamp distance to [0, 1]
                         if new_distance > 1 - Settings.PRECISE:
@@ -215,8 +215,8 @@ class CommunityDetection_v2:
                     converge_number += 1
                 
                 if Settings.DEBUG:
-                    test_str = (f"{edge_key} ,oldDis: {self.graph.distance(begin, end, self.current_step):.8f}, "
-                              f"newDis: {self.graph.distance(begin, end, next_step):.8f}, "
+                    test_str = (f"{edge_key} ,oldDis: {self.graph.weight(begin, end, self.current_step):.8f}, "
+                              f"newDis: {self.graph.weight(begin, end, next_step):.8f}, "
                               f"DI: {dd_di:.8f}, EI: {dd_ei:.8f}, CI: {dd_ci:.8f}")
                     Settings.log_each_iteration.write(test_str + "\n")
             
@@ -254,8 +254,8 @@ class CommunityDetection_v2:
         if begin == shared_vertex or end == shared_vertex:
             return 0.0
         
-        d_begin = self.graph.distance(begin, shared_vertex, self.current_step)
-        d_end = self.graph.distance(end, shared_vertex, self.current_step)
+        d_begin = self.graph.weight(begin, shared_vertex, self.current_step)
+        d_end = self.graph.weight(end, shared_vertex, self.current_step)
         
         begin_deg = len(self.graph.get_vertex_neighbours(begin)) - 1
         end_deg = len(self.graph.get_vertex_neighbours(end)) - 1
@@ -276,7 +276,7 @@ class CommunityDetection_v2:
         """
         Compute partial Exclusive Interaction.
         """
-        distance = (math.sin(1 - self.graph.distance(target_en, target, self.current_step)) *
+        distance = (math.sin(1 - self.graph.weight(target_en, target, self.current_step)) *
                    self.compute_influence(target_neighbour, target_en, target) /
                    (len(self.graph.get_vertex_neighbours(target)) - 1))
         
@@ -309,8 +309,8 @@ class CommunityDetection_v2:
             a, b = begin_neighbours[i], end_neighbours[j]
             if a == b:
                 vertex = begin_neighbours[i]
-                d_begin = self.graph.distance(begin, vertex, self.current_step)
-                d_end = self.graph.distance(end, vertex, self.current_step)
+                d_begin = self.graph.weight(begin, vertex, self.current_step)
+                d_end = self.graph.weight(end, vertex, self.current_step)
                 numerator += (1 - d_begin) + (1 - d_end)
                 i += 1
                 j += 1

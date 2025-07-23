@@ -29,7 +29,7 @@ class MRPreComputePartition:
     @staticmethod
     def map_function(edge_data, n_partitions) -> List[Tuple[int, Tuple[int, int, int]]]:
 
-        u, v  = edge_data.vertex_start, edge_data.vertex_end
+        u, v  = edge_data.center, edge_data.target
         hash_u = DynamicInteractions.node2hash(u, n_partitions)
         hash_v = DynamicInteractions.node2hash(v, n_partitions)
         

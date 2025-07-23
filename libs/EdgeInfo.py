@@ -10,7 +10,7 @@ class EdgeInfo:
         # Assertion per verificare che disuv sia nell'intervallo corretto
         assert 0 <= disuv <= 1, f"disuv deve essere tra 0 e 1, ricevuto: {disuv}"
         
-        self.distance = disuv
+        self.weight = disuv
         
         # TODO
         # TreeSet è implementato come set ordinato in Python

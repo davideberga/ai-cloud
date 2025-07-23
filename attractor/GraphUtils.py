@@ -106,7 +106,7 @@ class GraphUtils:
             # Jaccard distance = 1 - (intersection / union)
             dis = 1.0 - numerator / denominator if denominator != 0 else 1.0
             
-            edge_info.distance = dis
+            edge_info.weight = dis
             
             graph.update_edge(vertex_start, vertex_end, dis, self.m_i_current_step)
             graph.add_vertex_weight(vertex_start, dis, self.m_i_current_step)
@@ -119,7 +119,7 @@ class GraphUtils:
             with open("graph_jaccard_initilized", 'w') as distance_init_out:
                 for edge_key, edge_info in p_edges.items():
                     
-                    distance = edge_info.distance
+                    distance = edge_info.weight
                     vertex_start, vertex_end = Graph.from_key_to_vertex(edge_key)
                     distance_init_out.write(f"{vertex_start} {vertex_end} {distance:.6f}\n")
                     

@@ -83,7 +83,7 @@ class MRUpdateEdges:
 
         existDeltat = False
         
-        deltaWindow = np.zeros((32), dtype=np.bool)
+        deltaWindow = np.zeros((32), dtype=bool)
 
         for update in updates:
             

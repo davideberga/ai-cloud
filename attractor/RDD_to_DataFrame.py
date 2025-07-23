@@ -30,3 +30,8 @@ def get_star_graph_dataframe(spark: SparkSession, star_graph_rdd) -> DataFrame:
     })
     schema = DataframeSchemaProvider.get_schema_star_graph()
     return spark.createDataFrame(new_star_graph_rdd, schema=schema)
+
+def get_reduced_edges_dataframe(spark: SparkSession, reduced_edges) -> DataFrame:
+    
+    schema = DataframeSchemaProvider.get_schema_graph_jaccard()
+    return spark.createDataFrame(reduced_edges, schema=schema)

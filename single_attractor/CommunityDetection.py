@@ -93,14 +93,14 @@ class CommunityDetection:
                 pass  # Debug breakpoint equivalent
             
             # We need to find the sumWeight of a star graph whatever the edge weight is
-            d_distance = p_edge_value.distance
+            d_distance = p_edge_value.weight
             self.m_cGraph.update_edge(i_begin, i_end, d_distance, self.m_iCurrentStep)
             self.m_cGraph.add_vertex_weight(i_begin, d_distance, self.m_iCurrentStep)
             self.m_cGraph.add_vertex_weight(i_end, d_distance, self.m_iCurrentStep)
             
             cnt_check_sum_weight += 1
             
-            if 0 < p_edge_value.distance < 1:
+            if 0 < p_edge_value.weight < 1:
                 # We only consider non-converged edges to avoid out-of-memory issue
                 self.compute_common_neighbour(i_begin, i_end, p_edge_value)
                 self.compute_exclusive_neighbour(i_begin, i_end, p_edge_value)
@@ -197,7 +197,7 @@ class CommunityDetection:
                         if Settings.SLIDING_WINDOW_SIZE > 0:
                             delta = p_edge_value.add_new_delta_to_window(delta)
                         
-                        new_distance = self.m_cGraph.distance(i_begin, i_end, self.m_iCurrentStep) + delta
+                        new_distance = self.m_cGraph.weight(i_begin, i_end, self.m_iCurrentStep) + delta
                         
                         if new_distance > 1 - Settings.PRECISE:
                             new_distance = 1
@@ -217,7 +217,7 @@ class CommunityDetection:
                 
                 # Debug logging
                 if hasattr(self, 'DEBUG') and self.DEBUG and self.logSingle:
-                    test_str = f"{edge_key}, oldDis: {self.m_cGraph.distance(i_begin, i_end, self.m_iCurrentStep):.8f}, newDis: {self.m_cGraph.distance(i_begin, i_end, i_next_step):.8f}, DI: {_dd_di:.8f}, EI: {_dd_ei:.8f}, CI: {_dd_ci:.8f}"
+                    test_str = f"{edge_key}, oldDis: {self.m_cGraph.weight(i_begin, i_end, self.m_iCurrentStep):.8f}, newDis: {self.m_cGraph.weight(i_begin, i_end, i_next_step):.8f}, DI: {_dd_di:.8f}, EI: {_dd_ei:.8f}, CI: {_dd_ci:.8f}"
                     self.logSingle.write(test_str + "\n")
             
             if hasattr(self, 'DEBUG') and self.DEBUG and self.logSingle:
@@ -278,8 +278,8 @@ class CommunityDetection:
             if i_begin == i_shared_vertex or i_end == i_shared_vertex:
                 continue
             
-            d_begin = self.m_cGraph.distance(i_begin, i_shared_vertex, self.m_iCurrentStep)
-            d_end = self.m_cGraph.distance(i_end, i_shared_vertex, self.m_iCurrentStep)
+            d_begin = self.m_cGraph.weight(i_begin, i_shared_vertex, self.m_iCurrentStep)
+            d_end = self.m_cGraph.weight(i_end, i_shared_vertex, self.m_iCurrentStep)
             
             d_ci += (math.sin(1 - d_begin) * (1 - d_end) / (len(self.m_cGraph.get_vertex_neighbours(i_begin)) - 1) +
                      math.sin(1 - d_end) * (1 - d_begin) / (len(self.m_cGraph.get_vertex_neighbours(i_end)) - 1))
@@ -300,7 +300,7 @@ class CommunityDetection:
         d_distance = 0
         
         for vertex in target_en:
-            d_distance += (math.sin(1 - self.m_cGraph.distance(vertex, i_target, self.m_iCurrentStep)) *
+            d_distance += (math.sin(1 - self.m_cGraph.weight(vertex, i_target, self.m_iCurrentStep)) *
                           self.compute_influence(i_target_neighbour, vertex, i_target) /
                           (len(self.m_cGraph.get_vertex_neighbours(i_target)) - 1))
         
@@ -348,8 +348,8 @@ class CommunityDetection:
         set_common_neighbours = self.set_intersection(p_begin_neighbours, p_end_neighbours)
         
         for vertex in set_common_neighbours:
-            d_begin = self.m_cGraph.distance(i_begin, vertex, self.m_iCurrentStep)
-            d_end = self.m_cGraph.distance(i_end, vertex, self.m_iCurrentStep)
+            d_begin = self.m_cGraph.weight(i_begin, vertex, self.m_iCurrentStep)
+            d_end = self.m_cGraph.weight(i_end, vertex, self.m_iCurrentStep)
             d_numerator += (1 - d_begin) + (1 - d_end)
         
         d_denominator = (self.m_cGraph.get_vertex_weight_sum(i_begin, self.m_iCurrentStep) +

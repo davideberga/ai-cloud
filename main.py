@@ -17,6 +17,7 @@ from pyspark import SparkConf
 from attractor.RDD_to_DataFrame import (
     get_partitioned_dataframe,
     get_star_graph_dataframe,
+    get_reduced_edges_dataframe,
 )
 from attractor.MRDynamicInteractions import (
     MRDynamicInteractions,
@@ -29,6 +30,7 @@ DEBUG = False
 REDUCED_EDGE = True
 
 def main():
+    
     
     print("Working directory:", os.getcwd())
    
@@ -69,7 +71,8 @@ def main():
 
     graph_initilizer = GraphUtils(args.num_vertices)
     graph_with_jaccard: Graph = graph_initilizer.init_jaccard(args.graph_file)
-    df_graph_jaccard = graph_with_jaccard.get_graph_jaccard_dataframe(spark).rdd
+    df_graph_jaccard = graph_with_jaccard.get_graph_jaccard_dataframe(spark)
+    rdd_graph_jaccard = df_graph_jaccard.rdd
     df_graph_degree = graph_with_jaccard.get_degree_dict()
 
     #print("Graph with Jaccard:", df_graph_jaccard.take(1))
@@ -84,35 +87,33 @@ def main():
 
     partition_computer = MRPreComputePartition()
     df_partitioned = partition_computer.mapReduce(
-        df_graph_jaccard, args.num_partitions
+        rdd_graph_jaccard, args.num_partitions
     )
     #print(df_partitioned.collect())
     # df_partitioned = get_partitioned_dataframe(self.spark, partitioned)
     
     toc_pre_partition = time.time()
-    pre_compute_partition_time = int((toc_pre_partition - tic_pre_partition) * 1000)
-    
+    pre_compute_partition_time = (toc_pre_partition - tic_pre_partition)
+    print("pre_compute_partition_time:", round(pre_compute_partition_time, 3), "s")
     # --------------------------------------------------------------------
     # ---------------------- END compute partitions ----------------------
     # --------------------------------------------------------------------
 
     flag = True
     
-    prev_converged_edges_file = ""
-    tic = time.time()
-    
+    tic_main = time.time()
     iterations_counter = 0
-
+    counter = 0
     while flag:
         
         # --------------------------------------------------------------------
         # ----------------------- PHASE 2.1: Star Graph ----------------------
         # --------------------------------------------------------------------
-
+        
         tic = time.time()
         # Generate star graph with pre-partitions
         rdd_star_graph = MRStarGraphWithPrePartitions.mapReduce(
-            df_graph_jaccard, df_partitioned, rdd_graph_degree_broadcasted
+            rdd_graph_jaccard, df_partitioned, rdd_graph_degree_broadcasted
         )
 
         # df_star_graph = get_star_graph_dataframe(self.spark, rdd_star_graph)
@@ -121,6 +122,7 @@ def main():
 
         toc = time.time()
         time_generating_star_graph += toc - tic
+        #print("time_generating_star_graph:", round(time_generating_star_graph, 3), "s")
         
         # --------------------------------------------------------------------
         # ------------------- PHASE 2.2: Dynamic Interactions ----------------
@@ -139,6 +141,7 @@ def main():
         
         toc = time.time()
         time_computing_dynamic_interactions += toc - tic
+        #print("time_computing_dynamic_interactions:", round(time_computing_dynamic_interactions, 3), "s")
         
         # --------------------------------------------------------------------
         # ----------------------- PHASE 2.3: Update Edges --------------------
@@ -146,22 +149,38 @@ def main():
 
         print("START updating edges")
         tic = time.time()
-        rdd_updated_edges = MRUpdateEdges.mapReduce(df_graph_jaccard, rdd_dynamic_interactions, args.tau, args.window_size, iterations_counter)
-        
+        rdd_updated_edges = MRUpdateEdges.mapReduce(rdd_graph_jaccard, rdd_dynamic_interactions, args.tau, args.window_size, iterations_counter)
+
         
         # Actual execution of the 3 phases of MapReduce
         updated_edges = rdd_updated_edges.collect()
-        converged, non_converged, continued = CleanUp.reduce_edges(args.num_vertices, updated_edges)
+        #print("Updated edges:", updated_edges)
         
+        toc = time.time()
+        time_updating_edges += toc - tic
+
+        #print("time_updating_edges:", round(time_updating_edges, 3), "s")
+
+        tic_reduce = time.time()
+        converged, non_converged, continued, reduced_edges = CleanUp.reduce_edges(args.num_vertices, updated_edges)
+        toc_reduce = time.time()
+        #print("time_reduce_edges:", round(toc_reduce - tic_reduce, 3), "s")
+
+        df_reduced_edges = get_reduced_edges_dataframe(spark, reduced_edges)
+
+        #print(df_reduced_edges.take(5))
         print(converged, non_converged, continued)
         
-        if(non_converged <= args.gamma):
-            print("PD")
-            
-        
-        
-        
-    
+        # if(non_converged <= args.gamma):
+        #     print("PD")
+
+        flag = not (non_converged == 0)
+        rdd_graph_jaccard = df_reduced_edges.rdd
+        counter += 1
+        print("Iteration number: ", counter)
+        if flag == False:
+            toc_main = time.time()
+            print("Total time main:", round(toc_main - tic_main, 3), "s")
 
     if spark:
         spark.stop()

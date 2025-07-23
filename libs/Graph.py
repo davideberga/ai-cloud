@@ -105,7 +105,7 @@ class Graph:
         if edge_key not in self.m_dict_edges:
             return 0.0
         
-        return self.m_dict_edges[edge_key].distance
+        return self.m_dict_edges[edge_key].weight
     
     def get_vertex_weight_sum(self, i_vertex_id, i_step):
         """
@@ -218,7 +218,7 @@ class Graph:
                 edge_type=str(EdgeTypeEnum.G.value),
                 begin_vertex=vertex_start,
                 end_vertex=vertex_end,
-                distance=edge_value.distance,
+                weight=edge_value.weight,
             )
             edges_data.append(edge_record)
         

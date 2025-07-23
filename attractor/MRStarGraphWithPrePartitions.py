@@ -32,10 +32,10 @@ class MRStarGraphWithPrePartitions:
         if row[0] == 'S':
             # This is partition info
             results.append((row[1], {'type': 'S', 'triplets': row[3]}))
-        elif row.edge_type == 'G':
+        elif row.type == 'G':
             # For each edge, emit both directions
-            results.append((row.vertex_start, {'type': 'G', 'target': row.vertex_end, 'weight': row.distance}))
-            results.append((row.vertex_end, {'type': 'G', 'target': row.vertex_start, 'weight': row.distance}))
+            results.append((row.center, {'type': 'G', 'target': row.target, 'weight': row.weight}))
+            results.append((row.target, {'type': 'G', 'target': row.center, 'weight': row.weight}))
         return results
     
     # input: vertex_id is the id of the certal node of the star graph

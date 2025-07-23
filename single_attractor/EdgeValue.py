@@ -7,7 +7,7 @@ class EdgeValue:
         
         # Validazione del valore di distanza
         assert 0 <= disuv <= 1, "disuv deve essere compreso tra 0 e 1"
-        self.distance = disuv
+        self.weight = disuv
         
         # TreeSet equivale a set ordinato in Python
         # Per mantenere l'ordinamento si può usare una lista ordinata o set normale

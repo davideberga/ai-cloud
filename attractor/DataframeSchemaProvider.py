@@ -11,10 +11,10 @@ from pyspark.sql.types import (
 from enum import Enum
 
 class MRDataFrameColumns(Enum):
-    EDGE_TYPE = 'edge_type'
-    VERTEX_START = 'vertex_start'
-    VERTEX_END = 'vertex_end'
-    DISTANCE = 'distance'
+    EDGE_TYPE = 'type'
+    VERTEX_START = 'center'
+    VERTEX_END = 'target'
+    DISTANCE = 'weight'
     VERTEX_ID = 'vertex_id'
     DEGREE = 'degree'
     TRIPLETS = 'triplets'

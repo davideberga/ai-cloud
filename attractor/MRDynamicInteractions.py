@@ -79,7 +79,7 @@ class MRDynamicInteractions:
                         if neighbor_distance < 1 and neighbor_distance > 0:
                             listEdges.append(
                                 Row(
-                                    center=center, neighbor=neighbor_id, distance=neighbor_distance
+                                    center=center, neighbor=neighbor_id, weight=neighbor_distance
                                 )
                             )
                         main_edges += 1
@@ -99,7 +99,7 @@ class MRDynamicInteractions:
             dictSumWeight[center] = sumWeight
 
         for edge in listEdges:
-            if edge.distance < 1 and edge.distance > 0:
+            if edge.weight < 1 and edge.weight > 0:
                 deg_u = df_degree_broadcasted.get(edge.center, 0)
                 deg_v = df_degree_broadcasted.get(edge.neighbor, 0)
                 attr = DynamicInteractions.union_intersection(
@@ -111,7 +111,7 @@ class MRDynamicInteractions:
                     adjListDictForExclusive,
                     dictSumWeight,
                     n_partitions,
-                    edge.distance,
+                    edge.weight,
                     partition_name_splitted,
                     lambda_,
                 )
