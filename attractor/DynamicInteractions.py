@@ -282,4 +282,4 @@ class DynamicInteractions:
             
         delta =  di + sum_ci + sum_ei
 
-        return Row(type='I', center=u, target=v, weight=delta)
+        return (u, [{'type': 'I', 'target': v, 'weight': delta}])

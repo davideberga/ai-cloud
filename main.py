@@ -48,20 +48,7 @@ def main():
     spark = SparkSession.builder.config(conf=conf).getOrCreate()
     sc = spark.sparkContext
     sc.setLogLevel("ERROR")
-
-    # try:
-    #     process = psutil.Process()
-    #     memory_info = process.memory_info()
-    #     total_mem = memory_info.rss
-    #     megs = 1048576.0
-
-    #     print(f"Total Memory: {total_mem} ({total_mem / megs:.2f} MiB)")
-    #     print(
-    #         f"Available Memory: {psutil.virtual_memory().available} ({psutil.virtual_memory().available / megs:.2f} MiB)"
-    #     )
-    # except ImportError:
-    #     print("psutil not available - skipping memory info")
-
+    
     local_filesystem = "local"
     MyUtil.delete_path(args.output_folder)
 
@@ -136,8 +123,6 @@ def main():
             rdd_graph_degree_broadcasted,
         )
         
-        #print(rdd_dynamic_interactions.take(5))
-        
         toc = time.time()
         time_computing_dynamic_interactions += toc - tic
         #print("time_computing_dynamic_interactions:", round(time_computing_dynamic_interactions, 3), "s")
@@ -146,15 +131,13 @@ def main():
         # ----------------------- PHASE 2.3: Update Edges --------------------
         # --------------------------------------------------------------------
 
-        print("START updating edges")
-        tic = time.time()
         rdd_updated_edges = MRUpdateEdges.mapReduce(df_graph_jaccard, rdd_dynamic_interactions, args.tau, args.window_size, iterations_counter)
 
         
         start_spark_execution = time.time()
+        
         # Actual execution of the 3 phases of MapReduce
         updated_edges = rdd_updated_edges.collect()
-        #print("Updated edges:", updated_edges)
         
         print(f" >>> Total time iteration {round(time.time() - start_spark_execution , 3)} s <<< ")
         
@@ -163,21 +146,18 @@ def main():
 
         #print("time_updating_edges:", round(time_updating_edges, 3), "s")
 
-        tic_reduce = time.time()
         converged, non_converged, continued, reduced_edges = CleanUp.reduce_edges(args.num_vertices, updated_edges)
-        toc_reduce = time.time()
-        #print("time_reduce_edges:", round(toc_reduce - tic_reduce, 3), "s")
-
         df_reduced_edges = get_reduced_edges_dataframe(spark, reduced_edges)
 
         #print(df_reduced_edges.take(5))
         print(converged, non_converged, continued)
+        new_graph = []
+        for row in reduced_edges:
+            new_graph.append((row.center, [{"type": "G", "target": row.target, "weight": row.weight}]))
         
-        # if(non_converged <= args.gamma):
-        #     print("PD")
 
         flag = not (non_converged == 0)
-        rdd_graph_jaccard = df_reduced_edges.rdd
+        df_graph_jaccard = sc.parallelize(new_graph)
         counter += 1
         print("Iteration number: ", counter)
         if flag == False:

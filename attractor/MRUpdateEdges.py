@@ -30,19 +30,9 @@ class MRUpdateEdges:
 
     @staticmethod
     def map_function(rdd_edge):
-        edge_type = getattr(rdd_edge, "edge_type", None) or getattr(
-            rdd_edge, "type", None
-        )
-
-        center = getattr(rdd_edge, "vertex_start", None) or getattr(
-            rdd_edge, "center", None
-        )
-        target = getattr(rdd_edge, "vertex_end", None) or getattr(
-            rdd_edge, "target", None
-        )
-        weight = getattr(rdd_edge, "distance", None) or getattr(
-            rdd_edge, "weight", None
-        )
+        center = rdd_edge[0]
+        rdd_edge = rdd_edge[1][0]
+        edge_type, target, weight = rdd_edge["type"], rdd_edge["target"], rdd_edge["weight"]
         type_ = edge_type
 
         edge = Row(center=center, target=target)

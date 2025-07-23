@@ -33,6 +33,7 @@ class MRDynamicInteractions:
         triplets = star.triplets
         degree = df_degree_broadcasted.get(center, 0)
 
+
         results = [
             (triplet, Row(center=center, degree=degree, neighbors=neighbors))
             for triplet in triplets
@@ -53,6 +54,7 @@ class MRDynamicInteractions:
         partition_name_splitted = list(map(int, partition_name.split(" ")))
 
         for star_graph in star_graphs:
+            print(star_graph)
             center = star_graph.center # prima era u
             deg_center = star_graph.degree 
             neighbors = star_graph.neighbors
@@ -62,6 +64,7 @@ class MRDynamicInteractions:
             hash_center = DynamicInteractions.node2hash(center, n_partitions)
 
             for neigh_info in neighbors:
+                print(neigh_info)
                 neighbor_id = neigh_info.vertex_id # prima era v
                 neighbor_distance = neigh_info.weight
 

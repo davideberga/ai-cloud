@@ -11,16 +11,10 @@ class MRPreComputePartition:
 
     @staticmethod  
     def mapReduce(rdd_edge_with_jaccard: DataFrame, n_partitions: int) -> int:
-        print("Starting pre computation of partitions")
-        
         n_partitions = int(n_partitions)
-
         map_output = rdd_edge_with_jaccard.flatMap(lambda edge: MRPreComputePartition.map_function(edge, n_partitions)).groupByKey()  # Dataframe with vertex_id, triple=(i,j,k)
         combined_output = map_output.mapValues(set)  # Dataframe with vertex_id, set of triples
         reduce_output = combined_output.map(MRPreComputePartition.reduce_function)  # Dataframe with ("S", vertex_id, len(triples), triples) where vertex_id is the center of the star graph in the next step
-
-        print("Pre computation of partitions: END")
-        
         return reduce_output
     
     # input: edge(u,v)
