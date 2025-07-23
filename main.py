@@ -23,6 +23,7 @@ from attractor.MRDynamicInteractions import (
     MRDynamicInteractions,
 )
 import warnings
+from attractor.MyUtil import breadth_first_search
 
 warnings.filterwarnings("ignore")
 
@@ -170,9 +171,6 @@ def main():
 
         #print(df_reduced_edges.take(5))
         print(converged, non_converged, continued)
-        
-        # if(non_converged <= args.gamma):
-        #     print("PD")
 
         flag = not (non_converged == 0)
         rdd_graph_jaccard = df_reduced_edges.rdd
@@ -181,6 +179,14 @@ def main():
         if flag == False:
             toc_main = time.time()
             print("Total time main:", round(toc_main - tic_main, 3), "s")
+        # if counter == 2:
+        #     break
+    # --------------------------------------------------------------------
+    # ----------------------- PHASE 3: Community Detection ---------------
+    # --------------------------------------------------------------------
+
+    print(df_reduced_edges.collect())
+    communities = breadth_first_search(reduced_edges, args.num_vertices)
 
     if spark:
         spark.stop()

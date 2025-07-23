@@ -16,44 +16,36 @@ class MyUtil:
 
 
 
-def breadth_first_search(self, filename, N, outfile):
-    E = 0
+def breadth_first_search(output_second_phase, num_vertices):
     n_edge_dis1 = 0
-    visited = [0] * N
-    comms = [0] * N
-    adj_list = [[] for _ in range(N)]
+    visited = [0] * num_vertices
+    comms = [0] * num_vertices
+    adj_list = [[] for _ in range(num_vertices)]
 
-    with open(filename, "r") as reader:
-        for line in reader:
-            args = line.strip().split()
-            u = int(args[0])
-            v = int(args[1])
+    for row in output_second_phase:
+        _, u, v, weight = row
+        dis = 0
+        if "0." in str(weight):
+            dis = 0
+        elif "1." in str(weight):
+            dis = 1
+        else:
+            raise AssertionError("Something wrong in Breath First Search")
 
-            n = args[2].replace(",", ".")
-            if "0." in n:
-                dis = 0
-            elif "1." in n:
-                dis = 1
-            else:
-                raise AssertionError("Something wrong with implementation")
-
-            assert 1 <= u <= N and 1 <= v <= N
-            E += 1
-
-            if dis == 1:
-                n_edge_dis1 += 1
-                continue
-
-            u -= 1
-            v -= 1
-            adj_list[u].append(v)
-            adj_list[v].append(u)
+        if dis == 1: # Edge with distance 1 wiil be discarded
+            n_edge_dis1 += 1
+            continue
+        # Note to reduce this vertex
+        u -= 1
+        v -= 1
+        adj_list[u].append(v)
+        adj_list[v].append(u)
 
     # Compute BFS
     queue = deque()
     ID = 0
 
-    for i in range(N):
+    for i in range(num_vertices):
         if visited[i] == 0:
             # Start new BFS
             queue.clear()
@@ -61,10 +53,10 @@ def breadth_first_search(self, filename, N, outfile):
             queue.append(i)
             ID += 1  # New community
             comms[i] = ID
-
+            # These vertices are part of the same community
             while queue:
                 curr = queue.popleft()
-                assert 0 <= curr < N
+                assert 0 <= curr < num_vertices
                 visited[curr] = 1
 
                 for adj in adj_list[curr]:
@@ -74,6 +66,7 @@ def breadth_first_search(self, filename, N, outfile):
                     comms[adj] = ID
                     queue.append(adj)
 
-    with open(outfile, "w") as out:
-        for i in range(N):
-            out.write(f"{i + 1} {comms[i]}\n")
+        for i in range(num_vertices):
+            print(f"{i + 1} {comms[i]}")
+        
+        return comms
