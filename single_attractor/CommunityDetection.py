@@ -21,7 +21,7 @@ class CommunityDetection:
     n_vertices_reduce_graph = 0
 
     def setup_graph(self, reduced_edges): #str_filename
-        
+
         for row in reduced_edges:
             i_begin = row.center
             i_end = row.target
@@ -87,28 +87,23 @@ class CommunityDetection:
             cnt_check_sum_weight += 1
         
 
-    def update_sliding_window(self, sliding_data) -> None:
-        """
-        Updating sliding window from MR version.
-        
-        Args:
-            merged_sliding_windows_file: Path to merged sliding windows file
-        """
-        if not sliding_data:
+    def update_sliding_window(self, previousSlidingWindow) -> None:
+       
+        if not previousSlidingWindow:
             return
         
         no_loops_mr = min(self.current_loops + 1, self.args.window_size)
 
-        for sliding in sliding_data:
-            u = sliding.center
-            v = sliding.target
+        for key, values in previousSlidingWindow: # key: str'u-v', values: np.array[True, False, ...]
+            u = key.split('-')[0]
+            v = key.split('-')[1]
             edge_key = Graph.refine_edge_key(u, v)
         
-            if edge_key in self.graph.m_dictEdges:
-                vl = self.graph.m_dictEdges[edge_key]
+            if edge_key in self.graph.m_dict_edges:
+                vl = self.graph.m_dict_edges[edge_key]
                 status = []
-                for j in range(3, len(sliding)):
-                    s = int(sliding[j])
+                for j in range(3, len(previousSlidingWindow)):
+                    s = int(previousSlidingWindow[j])
                     assert s == 0 or s == 1
                     status.append(s)
                 vl.set_sliding_window(no_loops_mr, status)
@@ -312,9 +307,11 @@ class CommunityDetection:
         return d_distance
 
     @staticmethod
-    def execute(reduced_edges, sliding_data):
+    def execute(reduced_edges, previousSlidingWindow, num_vertices):
+        print("Executing Community Detection...", reduced_edges)
+        print("previousSlidingWindow:", previousSlidingWindow.value)
         detector = CommunityDetection()
         detector.setup_graph(reduced_edges)
         detector.initialize_graph(detector.graph)
-        detector.update_sliding_window(sliding_data)
+        detector.update_sliding_window(previousSlidingWindow.value)
         detector.dynamic_interaction()

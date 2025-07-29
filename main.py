@@ -168,53 +168,51 @@ def main():
 
         print(converged, non_converged, continued)
 
-        #flag = not (non_converged == 0)
-        # if non_converged <= args.gamma:
-        #     flag = False
-        #     counter += 1
-
-        #     # --------------------------------------------------------------------
-        #     # ----------------------- PHASE 3: Community Detection ---------------
-        #     # --------------------------------------------------------------------
-
-        #     print("START Community Detection")
-            
-        #     if usingSlidingWindow:
-        #         print("Using sliding window: ", args.window_size)
-        #         singleMachineOutput = CommunityDetection.execute(
-        #             reduced_edges, sliding_data
-        #             )
-        #     else:
-        #         print("NOT using sliding window!")
-        #         singleMachineOutput = CommunityDetection.execute(
-        #             reduced_edges, sliding_data
-        #             )
-                
-        #     communities = breadth_first_search(singleMachineOutput, num_vertices)
-            
-        # else:
-        #     counter += 1
-        #     rdd_graph_jaccard = df_reduced_edges.rdd
-
-        #     communities = breadth_first_search(reduced_edges, num_vertices)
-
-        # print("Communities:", communities)
-
-        # print("Iteration number: ", counter)
-        # if flag == False:
-        #     toc_main = time.time()
-        #     print("Total time main:", round(toc_main - tic_main, 3), "s")
-
         flag = not (non_converged == 0)
-        rdd_graph_jaccard = df_reduced_edges.rdd
-        counter += 1
+        if non_converged <= args.gamma:
+            flag = False
+            counter += 1
+
+            # --------------------------------------------------------------------
+            # ----------------------- PHASE 3: Community Detection ---------------
+            # --------------------------------------------------------------------
+
+            print("START Community Detection")
+            
+            if usingSlidingWindow:
+                print("Using sliding window: ", args.window_size)
+                singleMachineOutput = CommunityDetection.execute(
+                    reduced_edges, previousSlidingWindow, num_vertices
+                    )
+            else:
+                print("NOT using sliding window!")
+                singleMachineOutput = CommunityDetection.execute(
+                    reduced_edges, previousSlidingWindow, num_vertices
+                    )
+                
+            communities = breadth_first_search(singleMachineOutput, num_vertices)
+            
+        else:
+            counter += 1
+            rdd_graph_jaccard = df_reduced_edges.rdd
+
+            communities = breadth_first_search(reduced_edges, num_vertices)
+
         print("Iteration number: ", counter)
         if flag == False:
             toc_main = time.time()
             print("Total time main:", round(toc_main - tic_main, 3), "s")
 
-    print("START Community Detection")
-    communities = breadth_first_search(reduced_edges, num_vertices)
+        # flag = not (non_converged == 0)
+        # rdd_graph_jaccard = df_reduced_edges.rdd
+        # counter += 1
+        # print("Iteration number: ", counter)
+        # if flag == False:
+        #     toc_main = time.time()
+        #     print("Total time main:", round(toc_main - tic_main, 3), "s")
+
+    # print("START Community Detection")
+    # communities = breadth_first_search(reduced_edges, num_vertices)
 
     # Save communities to file
     save_communities(communities, args.output_folder, num_vertices)
