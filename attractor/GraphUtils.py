@@ -9,16 +9,14 @@ class GraphUtils:
     The output of this component will be used for Dynamic Interactions on MapReduce.
     """
     
-    def __init__(self, num_vertices: int):
+    def __init__(self):
         """
         Initialize JaccardInit with graph parameters.
         
         Args:
             graph_file: Path to the graph file
-            num_vertices: Number of vertices in the graph
         """
         self.m_i_current_step = 0
-        self.cnt_vertices = num_vertices
         self.current_loops = 0
     
     def setup_graph(self, graph_file: str) -> Graph:
@@ -51,14 +49,10 @@ class GraphUtils:
                     print(f"Error parsing line {line_num + 1}: {line}")
                     raise ValueError(f"Invalid number format in line {line_num + 1}") from e
         
-        # Assertions to verify graph construction
-        assert len(loaded_graph.m_dict_vertices) == self.cnt_vertices, \
-            f"No vertices: {len(loaded_graph.m_dict_vertices)}"
-        
         # Sort neighbors for each vertex
         for _, vertex_value in loaded_graph.m_dict_vertices.items():
             vertex_value.pNeighbours.sort()
-        
+
         return loaded_graph
     
     def initialize_graph(self, graph: Graph) -> Graph:

@@ -60,8 +60,9 @@ def main():
     # -------------------- PHASE 1: Jaccard Distance ---------------------
     # --------------------------------------------------------------------
 
-    graph_initilizer = GraphUtils(args.num_vertices)
-    graph_with_jaccard: Graph = graph_initilizer.init_jaccard(args.graph_file)
+    graph_initializer = GraphUtils()
+    graph_with_jaccard: Graph = graph_initializer.init_jaccard(args.graph_file)
+    num_vertices = graph_with_jaccard.get_num_vertex()
     df_graph_jaccard = graph_with_jaccard.get_graph_jaccard_dataframe(spark)
     rdd_graph_jaccard = df_graph_jaccard.rdd
     df_graph_degree = graph_with_jaccard.get_degree_dict()
@@ -159,7 +160,7 @@ def main():
         #print("time_updating_edges:", round(time_updating_edges, 3), "s")
 
         tic_reduce = time.time()
-        converged, non_converged, continued, reduced_edges = CleanUp.reduce_edges(args.num_vertices, updated_edges)
+        converged, non_converged, continued, reduced_edges = CleanUp.reduce_edges(num_vertices, updated_edges)
         toc_reduce = time.time()
         #print("time_reduce_edges:", round(toc_reduce - tic_reduce, 3), "s")
 
@@ -189,13 +190,13 @@ def main():
         #             reduced_edges, sliding_data
         #             )
                 
-        #     communities = breadth_first_search(singleMachineOutput, args.num_vertices)
+        #     communities = breadth_first_search(singleMachineOutput, num_vertices)
             
         # else:
         #     counter += 1
         #     rdd_graph_jaccard = df_reduced_edges.rdd
 
-        #     communities = breadth_first_search(reduced_edges, args.num_vertices)
+        #     communities = breadth_first_search(reduced_edges, num_vertices)
 
         # print("Communities:", communities)
 
@@ -213,10 +214,10 @@ def main():
             print("Total time main:", round(toc_main - tic_main, 3), "s")
 
     print("START Community Detection")
-    communities = breadth_first_search(reduced_edges, args.num_vertices)
+    communities = breadth_first_search(reduced_edges, num_vertices)
 
     # Save communities to file
-    save_communities(communities, args.output_folder, args.num_vertices)
+    save_communities(communities, args.output_folder, num_vertices)
 
     if spark:
         spark.stop()

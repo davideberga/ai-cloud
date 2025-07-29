@@ -15,6 +15,15 @@ class Graph:
         
         self.BEGIN_POINT = 0
         self.END_POINT = 0
+
+    def get_num_vertex(self) -> int:
+        """
+        Returns the number of vertices in the graph.
+        
+        Returns:
+            int: Number of vertices
+        """
+        return len(self.m_dict_vertices)
     
     def add_edge(self, i_begin, i_end, d_weight):
         # Add edge to the graph

@@ -127,7 +127,6 @@ python main.py \
 --output-folder MrAttractor \
 --lambda 0.6 \
 --mb-per-reducer 100 \
---num-vertices 34 \
 --window-size 20 \
 --tau 0.7 \
 --gamma 5000 \
@@ -142,7 +141,6 @@ python main.py \
 --output-folder MrAttractor_sample2 \
 --lambda 0.5 \
 --mb-per-reducer 100 \
---num-vertices 3710 \
 --window-size -20 \
 --tau 0.7 \
 --gamma 5000 \
