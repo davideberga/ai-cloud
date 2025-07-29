@@ -26,14 +26,11 @@ class MRStarGraphWithPrePartitions:
         rdd_mapped = df_graph_jaccard.union(df_partitioned)
         rdd_mapped = rdd_mapped.reduceByKey(MRStarGraphWithPrePartitions.aggregate_comb)
         
-        
-
         result_rdd = rdd_mapped.flatMap(
             lambda a: MRStarGraphWithPrePartitions.reduce_function(
                 a, df_graph_degree.value
             )
         )
-
         return result_rdd
     
     @staticmethod

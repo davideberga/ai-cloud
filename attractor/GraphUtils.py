@@ -9,16 +9,14 @@ class GraphUtils:
     The output of this component will be used for Dynamic Interactions on MapReduce.
     """
     
-    def __init__(self, num_vertices: int):
+    def __init__(self):
         """
         Initialize JaccardInit with graph parameters.
         
         Args:
             graph_file: Path to the graph file
-            num_vertices: Number of vertices in the graph
         """
         self.m_i_current_step = 0
-        self.cnt_vertices = num_vertices
         self.current_loops = 0
     
     def setup_graph(self, graph_file: str) -> Graph:
@@ -36,6 +34,9 @@ class GraphUtils:
                 if not line:
                     continue
                 
+                if line.startswith("#"):
+                    continue
+                
                 parts = line.split()
                 if len(parts) < 2:
                     continue
@@ -48,14 +49,10 @@ class GraphUtils:
                     print(f"Error parsing line {line_num + 1}: {line}")
                     raise ValueError(f"Invalid number format in line {line_num + 1}") from e
         
-        # Assertions to verify graph construction
-        assert len(loaded_graph.m_dict_vertices) == self.cnt_vertices, \
-            f"No vertices: {len(loaded_graph.m_dict_vertices)}"
-        
         # Sort neighbors for each vertex
         for _, vertex_value in loaded_graph.m_dict_vertices.items():
             vertex_value.pNeighbours.sort()
-        
+
         return loaded_graph
     
     def initialize_graph(self, graph: Graph) -> Graph:
@@ -66,7 +63,6 @@ class GraphUtils:
         
         p_edges = graph.get_all_edges()
         cnt_check_sum_weight = 0
-        
         
         for edge_key, edge_info in p_edges.items():
             
@@ -125,19 +121,38 @@ class GraphUtils:
                     
         return graph
     
+  
+    
     def init_jaccard(self, graph_file: str):
         """
             Run Jaccard Distance initialization
         """
-        tic = time.time()
     
         loaded_graph : Graph = self.setup_graph(graph_file)
         jaccard_initilized_graph = self.initialize_graph(loaded_graph)
         
-        toc = time.time()
-        running_time = toc - tic
+        return jaccard_initilized_graph
+    
+    def setup_graph_rdd(self, reduced_edges): #str_filename
+        graph = Graph()
+        n_edges_reduce_graph = 0
          
-        print(f"Jaccard initialization time: {running_time:.3f}\n")
+        for row in reduced_edges:
+            i_begin = row.center
+            i_end = row.target
+            d_weight = row.weight
+            graph.add_edge(i_begin, i_end, d_weight)
+            n_edges_reduce_graph += 1
+
+        return graph,  graph.get_num_edges()
+    
+    def init_jaccard_from_rdd(self, reduced_edges):
+        """
+            Run Jaccard Distance initialization
+        """
+    
+        loaded_graph : Graph = self.setup_graph_rdd(reduced_edges)
+        jaccard_initilized_graph = self.initialize_graph(loaded_graph)
         
         return jaccard_initilized_graph
 

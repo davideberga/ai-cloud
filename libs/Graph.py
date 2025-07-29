@@ -15,19 +15,27 @@ class Graph:
         
         self.BEGIN_POINT = 0
         self.END_POINT = 0
+
+    def get_num_vertex(self) -> int:
+        """
+        Returns the number of vertices in the graph.
+        
+        Returns:
+            int: Number of vertices
+        """
+        return len(self.m_dict_vertices)
+    
+    def get_num_edges(self) -> int:
+        """
+        Returns the number of edges in the graph.
+        
+        Returns:
+            int: Number of edges
+        """
+        return len(self.m_dict_edges)
     
     def add_edge(self, i_begin, i_end, d_weight):
-        """
-        Aggiunge un arco al grafo.
-        
-        Args:
-            i_begin (int): Vertice di inizio
-            i_end (int): Vertice di fine
-            d_weight (float): Peso dell'arco
-            
-        Returns:
-            bool: True se l'arco è stato aggiunto, False se esisteva già
-        """
+        # Add edge to the graph
         edge_key = self.refine_edge_key(i_begin, i_end)
         
         if edge_key in self.m_dict_edges:
@@ -179,7 +187,7 @@ class Graph:
             raise Exception("No such an iVertexId.")
         
         vertex_value = self.m_dict_vertices[i_vertex_id]
-        return vertex_value.p_neighbours
+        return vertex_value.pNeighbours
     
     def add_vertex(self, i_begin, i_end):
         """
@@ -231,16 +239,7 @@ class Graph:
 
     @staticmethod
     def refine_edge_key(i_begin, i_end):
-        """
-        Crea una chiave standardizzata per un arco.
-        
-        Args:
-            i_begin (int): Vertice di inizio
-            i_end (int): Vertice di fine
-            
-        Returns:
-            str: Chiave dell'arco standardizzata
-        """
+       # Create a unique key for the edge
         if i_begin > i_end:
             return f"{i_begin} {i_end}"
         return f"{i_end} {i_begin}"

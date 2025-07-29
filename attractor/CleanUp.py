@@ -11,6 +11,7 @@ class CleanUp:
         non_converged = 0
         converged = 0
         
+        
         for row in output_update_edges:
             u = row.center
             v = row.target
