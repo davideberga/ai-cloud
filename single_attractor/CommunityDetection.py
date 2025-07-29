@@ -8,7 +8,7 @@ from args_parser import parse_arguments
 class CommunityDetection:
 
     step = 0
-    graph = Graph()
+   
     current_loops = 0
     begin_point = 0
     end_point = 1
@@ -86,7 +86,6 @@ class CommunityDetection:
             
             cnt_check_sum_weight += 1
         
-
     def update_sliding_window(self, previousSlidingWindow) -> None:
        
         if not previousSlidingWindow:
@@ -159,14 +158,14 @@ class CommunityDetection:
                             new_distance = 0
 
                         self.graph.update_edge(i_begin, i_end, new_distance, i_next_step)
-                        self.graph.add_vertex_weight(i_begin, new_distance, i_next_step)
-                        self.graph.add_vertex_weight(i_end, new_distance, i_next_step)
+                        # self.graph.add_vertex_weight(i_begin, new_distance, i_next_step)
+                        # self.graph.add_vertex_weight(i_end, new_distance, i_next_step)
                         b_continue = True
                 else:
                     p_edge_value.weight[i_next_step] = p_edge_value.weight[self.step]
                     new_distance = p_edge_value.weight[self.step]
-                    self.graph.add_vertex_weight(i_begin, new_distance, i_next_step)
-                    self.graph.add_vertex_weight(i_end, new_distance, i_next_step)
+                    # self.graph.add_vertex_weight(i_begin, new_distance, i_next_step)
+                    # self.graph.add_vertex_weight(i_end, new_distance, i_next_step)
                     i_converge_number += 1
                 
                

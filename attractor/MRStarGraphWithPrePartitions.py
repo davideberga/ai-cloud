@@ -10,8 +10,6 @@ class MRStarGraphWithPrePartitions:
     @staticmethod
     def mapReduce(df_graph_jaccard, df_partitioned, df_graph_degree):
         
-        print("Start Star Graph Computation")
-        
         jaccard_mapped = df_graph_jaccard.flatMap(MRStarGraphWithPrePartitions.map_function)
         partitions_mapped = df_partitioned.flatMap(MRStarGraphWithPrePartitions.map_function)
         rdd_mapped = jaccard_mapped.union(partitions_mapped)
@@ -19,8 +17,6 @@ class MRStarGraphWithPrePartitions:
         result_rdd = rdd_mapped.groupByKey().flatMap(
             lambda a: MRStarGraphWithPrePartitions.reduce_function(a, df_graph_degree.value)
         )
-
-        print("Start Star Graph Computation END")
         
         return result_rdd
     

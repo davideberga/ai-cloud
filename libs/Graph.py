@@ -25,6 +25,15 @@ class Graph:
         """
         return len(self.m_dict_vertices)
     
+    def get_num_edges(self) -> int:
+        """
+        Returns the number of edges in the graph.
+        
+        Returns:
+            int: Number of edges
+        """
+        return len(self.m_dict_edges)
+    
     def add_edge(self, i_begin, i_end, d_weight):
         # Add edge to the graph
         edge_key = self.refine_edge_key(i_begin, i_end)

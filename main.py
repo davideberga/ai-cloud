@@ -1,5 +1,6 @@
 import os
 import time
+import signal, sys
 from args_parser import parse_arguments
 from attractor import GraphUtils
 from attractor.GraphUtils import GraphUtils
@@ -15,8 +16,6 @@ from libs.Graph import Graph
 from single_attractor.CommunityDetection import CommunityDetection
 from pyspark import SparkConf
 from attractor.RDD_to_DataFrame import (
-    get_partitioned_dataframe,
-    get_star_graph_dataframe,
     get_reduced_edges_dataframe,
 )
 from attractor.MRDynamicInteractions import (
@@ -24,187 +23,108 @@ from attractor.MRDynamicInteractions import (
 )
 import warnings
 from attractor.MyUtil import breadth_first_search, save_communities
+from rich import print
 
 warnings.filterwarnings("ignore")
 
 DEBUG = False
 REDUCED_EDGE = True
 
-def main():
-    
-    print("Working directory:", os.getcwd())
-    args = parse_arguments()
 
-    usingSlidingWindow = False
-    if args.window_size > 0:
-        usingSlidingWindow = True
-        print("Using sliding window with size:", args.window_size)
-   
-    time_generating_star_graph = 0.0
-    time_computing_dynamic_interactions = 0.0
-    time_updating_edges = 0.0
-    time_running_on_single_machine = 0.0
+def log(message: str):
+    print(f"[MRAttractor] {message}")
 
-    conf = SparkConf()
-    conf.setAppName("MasterMR_Pipeline")
-    conf.set("spark.sql.adaptive.enabled", "true")
-    conf.set("spark.sql.adaptive.coalescePartitions.enabled", "true")
 
-    spark = SparkSession.builder.config(conf=conf).getOrCreate()
-    sc = spark.sparkContext
-    sc.setLogLevel("ERROR")
-
+def main(args, spark, sc):
     MyUtil.delete_path(args.output_folder)
 
-    # --------------------------------------------------------------------
-    # -------------------- PHASE 1: Jaccard Distance ---------------------
-    # --------------------------------------------------------------------
+    # -- PHASE 1: graph loading and computing jaccard Distance --
+    graph_initilizer = GraphUtils()
 
-    graph_initializer = GraphUtils()
-    graph_with_jaccard: Graph = graph_initializer.init_jaccard(args.graph_file)
-    num_vertices = graph_with_jaccard.get_num_vertex()
-    df_graph_jaccard = graph_with_jaccard.get_graph_jaccard_dataframe(spark)
-    rdd_graph_jaccard = df_graph_jaccard.rdd
-    df_graph_degree = graph_with_jaccard.get_degree_dict()
+    start_jaccard = time.time()
+    graph_with_jaccard: Graph = graph_initilizer.init_jaccard(args.graph_file)
+    n_v, n_e = graph_with_jaccard.get_num_vertex(), graph_with_jaccard.get_num_edges()
 
-    #print("Graph with Jaccard:", df_graph_jaccard.collect())
-    #print("Graph with Degree:", df_graph_degree)
-    rdd_graph_degree_broadcasted = sc.broadcast(df_graph_degree)
-    
-    # --------------------------------------------------------------------
-    # ---------------------- START compute partitions --------------------
-    # --------------------------------------------------------------------
+    log(f"[green]Loaded {args.graph_file}, |V|: {n_v}, |E|: {n_e} [/green]")
 
-    tic_pre_partition = time.time()
+    rdd_graph_jaccard = graph_with_jaccard.get_graph_jaccard_dataframe(spark).rdd
+    log(f"Jaccard distance init in {round(time.time() - start_jaccard, 2)} s")
 
-    partition_computer = MRPreComputePartition()
-    df_partitioned = partition_computer.mapReduce(
+    # Broadcast degree datasource
+    rdd_graph_degree_broadcasted = sc.broadcast(graph_with_jaccard.get_degree_dict())
+
+    # -- Compute Partitions --
+    start_partition = time.time()
+    df_partitioned = MRPreComputePartition.mapReduce(
         rdd_graph_jaccard, args.num_partitions
     )
-    #print(df_partitioned.collect())
-    # df_partitioned = get_partitioned_dataframe(self.spark, partitioned)
-    
-    toc_pre_partition = time.time()
-    pre_compute_partition_time = (toc_pre_partition - tic_pre_partition)
-    print("pre_compute_partition_time:", round(pre_compute_partition_time, 3), "s")
-    # --------------------------------------------------------------------
-    # ---------------------- END compute partitions ----------------------
-    # --------------------------------------------------------------------
+    log(f"Partitions computed in {round(time.time() - start_partition, 3)} s")
 
     flag = True
-    
     tic_main = time.time()
-    iterations_counter = 0
     counter = 0
-
     previousSlidingWindow = None
     while flag:
-        
-        # --------------------------------------------------------------------
-        # ----------------------- PHASE 2.1: Star Graph ----------------------
-        # --------------------------------------------------------------------
-        
-        tic = time.time()
-        # Generate star graph with pre-partitions
+        # -- PHASE 2.1: Star Graph --
         rdd_star_graph = MRStarGraphWithPrePartitions.mapReduce(
             rdd_graph_jaccard, df_partitioned, rdd_graph_degree_broadcasted
         )
 
-        # df_star_graph = get_star_graph_dataframe(self.spark, rdd_star_graph)
-        
-        #print(rdd_star_graph.collect())
-
-        toc = time.time()
-        time_generating_star_graph += toc - tic
-        #print("time_generating_star_graph:", round(time_generating_star_graph, 3), "s")
-        
-        # --------------------------------------------------------------------
-        # ------------------- PHASE 2.2: Dynamic Interactions ----------------
-        # --------------------------------------------------------------------
-
-        tic = time.time()
-        
+        # -- PHASE 2.2: Dynamic Interactions --
         rdd_dynamic_interactions = MRDynamicInteractions.mapReduce(
             rdd_star_graph,
             args.num_partitions,
             args.lambda_,
             rdd_graph_degree_broadcasted,
         )
-        
-        #print(rdd_dynamic_interactions.take(5))
-        
-        toc = time.time()
-        time_computing_dynamic_interactions += toc - tic
-        #print("time_computing_dynamic_interactions:", round(time_computing_dynamic_interactions, 3), "s")
-        
-        # --------------------------------------------------------------------
-        # ----------------------- PHASE 2.3: Update Edges --------------------
-        # --------------------------------------------------------------------
 
-        print("START updating edges")
-        tic = time.time()
-        rdd_updated_edges, sliding_data = MRUpdateEdges.mapReduce(rdd_graph_jaccard, rdd_dynamic_interactions, args.tau, args.window_size, counter, previousSlidingWindow)
+        # -- PHASE 2.3: Update Edges --
+        rdd_updated_edges, sliding_data = MRUpdateEdges.mapReduce(
+            rdd_graph_jaccard,
+            rdd_dynamic_interactions,
+            args.tau,
+            args.window_size,
+            counter,
+            previousSlidingWindow,
+        )
 
         # Actual execution of the 3 phases of MapReduce
         start_spark_execution = time.time()
-        # Actual execution of the 3 phases of MapReduce
         updated_edges = rdd_updated_edges.collect()
+
         dict_sliding = {}
-
-        for (edge, sliding) in sliding_data.collect():
+        for edge, sliding in sliding_data.collect():
             dict_sliding[edge] = sliding
-
         previousSlidingWindow = sc.broadcast(dict_sliding)
-        
-        print(f" >>> Total time iteration {round(time.time() - start_spark_execution , 3)} s <<< ")
-        
-        #print("Updated edges:", updated_edges)
-        
-        toc = time.time()
-        time_updating_edges += toc - tic
 
-        #print("time_updating_edges:", round(time_updating_edges, 3), "s")
-
-        tic_reduce = time.time()
-        converged, non_converged, continued, reduced_edges = CleanUp.reduce_edges(num_vertices, updated_edges)
-        toc_reduce = time.time()
-        #print("time_reduce_edges:", round(toc_reduce - tic_reduce, 3), "s")
+        converged, non_converged, continued, reduced_edges = CleanUp.reduce_edges(
+            n_v, updated_edges
+        )
 
         df_reduced_edges = get_reduced_edges_dataframe(spark, reduced_edges)
 
-        print(converged, non_converged, continued)
+        it_time = round(time.time() - start_spark_execution, 2)
+        log(
+            f"[bold orange3]It: {counter}, converged: {converged} / {n_e}, time {it_time} s [/bold orange3] "
+        )
 
         flag = not (non_converged == 0)
-        if non_converged <= args.gamma:
+        if non_converged < args.gamma:
             flag = False
-            counter += 1
 
             # --------------------------------------------------------------------
             # ----------------------- PHASE 3: Community Detection ---------------
             # --------------------------------------------------------------------
 
             print("START Community Detection")
-            
-            if usingSlidingWindow:
-                print("Using sliding window: ", args.window_size)
-                singleMachineOutput = CommunityDetection.execute(
-                    reduced_edges, previousSlidingWindow, num_vertices
-                    )
-            else:
-                print("NOT using sliding window!")
-                singleMachineOutput = CommunityDetection.execute(
-                    reduced_edges, previousSlidingWindow, num_vertices
-                    )
-                
-            communities = breadth_first_search(singleMachineOutput, num_vertices)
-            
-        else:
-            counter += 1
-            rdd_graph_jaccard = df_reduced_edges.rdd
+            singleMachineOutput = CommunityDetection.execute(
+                reduced_edges, previousSlidingWindow, n_v
+            )
 
-            communities = breadth_first_search(reduced_edges, num_vertices)
+            communities = breadth_first_search(singleMachineOutput, n_v)
 
-        print("Iteration number: ", counter)
+        rdd_graph_jaccard = df_reduced_edges.rdd
+
         if flag == False:
             toc_main = time.time()
             print("Total time main:", round(toc_main - tic_main, 3), "s")
@@ -217,15 +137,53 @@ def main():
         #     toc_main = time.time()
         #     print("Total time main:", round(toc_main - tic_main, 3), "s")
 
-    # print("START Community Detection")
-    # communities = breadth_first_search(reduced_edges, num_vertices)
+        # print("START Community Detection")
+        # communities = breadth_first_search(reduced_edges, num_vertices)
+        rdd_graph_jaccard = df_reduced_edges.rdd
+        counter += 1
+
+    log(f"Main time: [bold orange3] {round(time.time() - tic_main, 2)} [/bold orange3]")
+
+    communities = breadth_first_search(reduced_edges, n_v)
 
     # Save communities to file
-    save_communities(communities, args.output_folder, num_vertices)
+    save_communities(communities, args.output_folder, n_v)
 
-    if spark:
-        spark.stop()
-        print("SparkSession and SparkContext stopped")
 
 if __name__ == "__main__":
-    main()
+    args = parse_arguments()
+
+    log(f"[cyan] Window size: {args.window_size}, gamma: {args.gamma} [/cyan]")
+
+    try:
+        conf = SparkConf()
+        conf.setAppName("MRAttractor")
+        conf.set("spark.sql.adaptive.enabled", "true")
+        conf.set("spark.sql.adaptive.coalescePartitions.enabled", "true")
+
+        spark = SparkSession.builder.config(conf=conf).getOrCreate()
+        spark_context = spark.sparkContext
+
+        spark_context.setLogLevel("ERROR")
+        spark_context.setLocalProperty("spark.ui.showConsoleProgress", "false")
+
+        def handle_sigint(signum, frame):
+            print("\n[bold red] Execution interrupted, stopping spark... [/bold red]")
+            try:
+                if spark_context:
+                    spark_context.cancelAllJobs()
+                if spark:
+                    spark.stop()
+            except Exception:
+                pass
+
+        signal.signal(signal.SIGINT, handle_sigint)
+
+        main(args, spark, spark_context)
+    except (KeyboardInterrupt, Exception) as e:
+        log(f"[bold red] {e} [/bold red]")
+        print("[bold red] Execution interrupted, stopping spark... [/bold red]")
+    finally:
+        if spark:
+            spark.stop()
+        sys.exit(0)

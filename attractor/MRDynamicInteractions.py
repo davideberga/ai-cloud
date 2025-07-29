@@ -6,8 +6,6 @@ from attractor.DynamicInteractions import DynamicInteractions
 class MRDynamicInteractions:
     @staticmethod
     def mapReduce(rdd_star_graph, n_partition: int, _lambda_: float, df_degree_broadcasted):
-        
-        print("Compute Dynamic Interactions")
          
         intermediate_rdd = rdd_star_graph.flatMap(
             lambda sg: MRDynamicInteractions.map_function(sg, df_degree_broadcasted.value)
@@ -20,8 +18,6 @@ class MRDynamicInteractions:
                 part, df_degree_broadcasted.value, n_partition, _lambda_
             )
         )
-
-        print("Compute Dynamic Interactions END")
         return computed_dyni
     
     @staticmethod

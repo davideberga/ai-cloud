@@ -121,19 +121,38 @@ class GraphUtils:
                     
         return graph
     
+  
+    
     def init_jaccard(self, graph_file: str):
         """
             Run Jaccard Distance initialization
         """
-        tic = time.time()
     
         loaded_graph : Graph = self.setup_graph(graph_file)
         jaccard_initilized_graph = self.initialize_graph(loaded_graph)
         
-        toc = time.time()
-        running_time = toc - tic
+        return jaccard_initilized_graph
+    
+    def setup_graph_rdd(self, reduced_edges): #str_filename
+        graph = Graph()
+        n_edges_reduce_graph = 0
          
-        print(f"Jaccard initialization time: {running_time:.3f}\n")
+        for row in reduced_edges:
+            i_begin = row.center
+            i_end = row.target
+            d_weight = row.weight
+            graph.add_edge(i_begin, i_end, d_weight)
+            n_edges_reduce_graph += 1
+
+        return graph,  graph.get_num_edges()
+    
+    def init_jaccard_from_rdd(self, reduced_edges):
+        """
+            Run Jaccard Distance initialization
+        """
+    
+        loaded_graph : Graph = self.setup_graph_rdd(reduced_edges)
+        jaccard_initilized_graph = self.initialize_graph(loaded_graph)
         
         return jaccard_initilized_graph
 
