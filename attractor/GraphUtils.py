@@ -36,6 +36,9 @@ class GraphUtils:
                 if not line:
                     continue
                 
+                if line.startswith("#"):
+                    continue
+                
                 parts = line.split()
                 if len(parts) < 2:
                     continue
@@ -66,7 +69,6 @@ class GraphUtils:
         
         p_edges = graph.get_all_edges()
         cnt_check_sum_weight = 0
-        
         
         for edge_key, edge_info in p_edges.items():
             

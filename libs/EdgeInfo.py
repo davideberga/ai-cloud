@@ -17,10 +17,10 @@ class EdgeInfo:
         # In Python, set() è efficiente ma non mantiene l'ordine
         # Per mantenere l'ordine come TreeSet, si può usare una lista ordinata
         # o importare from sortedcontainers import SortedSet
-        self.p_common_neighbours = set()
+        self.pCommonNeighbours = set()
         
         # Lista di due set per i vicini esclusivi
-        self.p_exclusive_neighbours = [set(), set()]
+        self.pExclusiveNeighbours = [set(), set()]
     
     def add_new_delta_2_window(self, d_delta):
         """

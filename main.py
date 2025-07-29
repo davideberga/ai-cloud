@@ -23,7 +23,7 @@ from attractor.MRDynamicInteractions import (
     MRDynamicInteractions,
 )
 import warnings
-from attractor.MyUtil import breadth_first_search
+from attractor.MyUtil import breadth_first_search, save_communities
 
 warnings.filterwarnings("ignore")
 
@@ -32,10 +32,14 @@ REDUCED_EDGE = True
 
 def main():
     
-    
     print("Working directory:", os.getcwd())
-   
     args = parse_arguments()
+
+    usingSlidingWindow = False
+    if args.window_size > 0:
+        usingSlidingWindow = True
+        print("Using sliding window with size:", args.window_size)
+   
     time_generating_star_graph = 0.0
     time_computing_dynamic_interactions = 0.0
     time_updating_edges = 0.0
@@ -50,20 +54,6 @@ def main():
     sc = spark.sparkContext
     sc.setLogLevel("ERROR")
 
-    # try:
-    #     process = psutil.Process()
-    #     memory_info = process.memory_info()
-    #     total_mem = memory_info.rss
-    #     megs = 1048576.0
-
-    #     print(f"Total Memory: {total_mem} ({total_mem / megs:.2f} MiB)")
-    #     print(
-    #         f"Available Memory: {psutil.virtual_memory().available} ({psutil.virtual_memory().available / megs:.2f} MiB)"
-    #     )
-    # except ImportError:
-    #     print("psutil not available - skipping memory info")
-
-    local_filesystem = "local"
     MyUtil.delete_path(args.output_folder)
 
     # --------------------------------------------------------------------
@@ -105,6 +95,8 @@ def main():
     tic_main = time.time()
     iterations_counter = 0
     counter = 0
+
+    previousSlidingWindow = None
     while flag:
         
         # --------------------------------------------------------------------
@@ -150,11 +142,16 @@ def main():
 
         print("START updating edges")
         tic = time.time()
-        rdd_updated_edges = MRUpdateEdges.mapReduce(rdd_graph_jaccard, rdd_dynamic_interactions, args.tau, args.window_size, iterations_counter)
+        rdd_updated_edges, sliding_data = MRUpdateEdges.mapReduce(rdd_graph_jaccard, rdd_dynamic_interactions, args.tau, args.window_size, counter, previousSlidingWindow)
 
         # Actual execution of the 3 phases of MapReduce
         updated_edges = rdd_updated_edges.collect()
-        #print("Updated edges:", updated_edges)
+        dict_sliding = {}
+
+        for (edge, sliding) in sliding_data.collect():
+            dict_sliding[edge] = sliding
+
+        previousSlidingWindow = sc.broadcast(dict_sliding)
         
         toc = time.time()
         time_updating_edges += toc - tic
@@ -170,6 +167,43 @@ def main():
 
         print(converged, non_converged, continued)
 
+        #flag = not (non_converged == 0)
+        # if non_converged <= args.gamma:
+        #     flag = False
+        #     counter += 1
+
+        #     # --------------------------------------------------------------------
+        #     # ----------------------- PHASE 3: Community Detection ---------------
+        #     # --------------------------------------------------------------------
+
+        #     print("START Community Detection")
+            
+        #     if usingSlidingWindow:
+        #         print("Using sliding window: ", args.window_size)
+        #         singleMachineOutput = CommunityDetection.execute(
+        #             reduced_edges, sliding_data
+        #             )
+        #     else:
+        #         print("NOT using sliding window!")
+        #         singleMachineOutput = CommunityDetection.execute(
+        #             reduced_edges, sliding_data
+        #             )
+                
+        #     communities = breadth_first_search(singleMachineOutput, args.num_vertices)
+            
+        # else:
+        #     counter += 1
+        #     rdd_graph_jaccard = df_reduced_edges.rdd
+
+        #     communities = breadth_first_search(reduced_edges, args.num_vertices)
+
+        # print("Communities:", communities)
+
+        # print("Iteration number: ", counter)
+        # if flag == False:
+        #     toc_main = time.time()
+        #     print("Total time main:", round(toc_main - tic_main, 3), "s")
+
         flag = not (non_converged == 0)
         rdd_graph_jaccard = df_reduced_edges.rdd
         counter += 1
@@ -178,12 +212,12 @@ def main():
             toc_main = time.time()
             print("Total time main:", round(toc_main - tic_main, 3), "s")
 
-    # --------------------------------------------------------------------
-    # ----------------------- PHASE 3: Community Detection ---------------
-    # --------------------------------------------------------------------
     print("START Community Detection")
     communities = breadth_first_search(reduced_edges, args.num_vertices)
-    print("Communities:", communities)
+
+    # Save communities to file
+    save_communities(communities, args.output_folder, args.num_vertices)
+
     if spark:
         spark.stop()
         print("SparkSession and SparkContext stopped")

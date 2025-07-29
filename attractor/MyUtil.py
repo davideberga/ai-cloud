@@ -1,9 +1,7 @@
 from pyspark.sql import SparkSession
-import os, sys
+import os
 import shutil
-import time
 from collections import deque
-
 
 class MyUtil:
 
@@ -13,8 +11,6 @@ class MyUtil:
             shutil.rmtree(path)
         elif os.path.isfile(path):
             os.remove(path)
-
-
 
 def breadth_first_search(output_second_phase, num_vertices):
     n_edge_dis1 = 0
@@ -66,7 +62,19 @@ def breadth_first_search(output_second_phase, num_vertices):
                     comms[adj] = ID
                     queue.append(adj)
 
+    # Print type of community (comms) for each vertex
     # for i in range(num_vertices):
     #     print(f"{i + 1} {comms[i]}")
-        
+
+    n_comms = max(comms)
+    print(f"Number of communities: {n_comms}")
+
     return comms
+
+def save_communities(communities, output_folder, num_vertices):
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+
+    with open(f"{output_folder}/communities.txt", "w") as f:
+        for i in range(num_vertices):
+            f.write(f"{i + 1} {communities[i]}\n")
