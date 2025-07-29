@@ -7,8 +7,7 @@ class MRDynamicInteractions:
     @staticmethod
     def mapReduce(rdd_star_graph, n_partition: int, _lambda_: float, df_degree_broadcasted):
          
-        print(rdd_star_graph.take(5))
-        exit(0)
+        
         intermediate_rdd = rdd_star_graph.flatMap(
             lambda sg: MRDynamicInteractions.map_function(sg, df_degree_broadcasted.value)
         )
@@ -20,6 +19,7 @@ class MRDynamicInteractions:
                 part, df_degree_broadcasted.value, n_partition, _lambda_
             )
         )
+        
         return computed_dyni
     
     @staticmethod

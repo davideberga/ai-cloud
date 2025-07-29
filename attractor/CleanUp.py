@@ -13,9 +13,9 @@ class CleanUp:
         
         
         for row in output_update_edges:
-            u = row.center
-            v = row.target
-            dis = row.weight
+            u = row[0]
+            v = row[1][0]["target"]
+            dis = row[1][0]["weight"]
             if dis < 1 and dis > 0:
                 u -= 1
                 v -= 1
@@ -26,8 +26,8 @@ class CleanUp:
                 converged   += 1
                 
         for row in output_update_edges:
-            u = row.center
-            v = row.target
+            u = row[0]
+            v = row[1][0]["target"]
             u -= 1
             v -= 1
             if dirty[u] == 1 or dirty[v] == 1:
@@ -37,8 +37,8 @@ class CleanUp:
         the_number_of_continued_to_used_edges = 0
                 
         for row in output_update_edges:
-            u = row.center
-            v = row.target
+            u = row[0]
+            v = row[1][0]["target"]
             u -= 1
             v -= 1
             if dirty[u] == 1 or dirty[v] == 1 or dirty[u] == 2 or dirty[v] == 2:
@@ -61,3 +61,29 @@ class CleanUp:
                 cnt += 1
 
         assert cnt == no_original_edges
+        
+        
+    @staticmethod
+    def reduce_edges_spark(n_vertices, rdd_edges):
+        # Step 1: Mark edges as converged / non-converged
+        # row: (u, [{"target": v, "weight": dis}])
+        marked = rdd_edges.map(
+            lambda row: (
+                row[0],
+                row[1][0]["target"],
+                row[1][0]["weight"],
+                1 if 0 < row[1][0]["weight"] < 1 else 0
+            )
+        )
+        # Now each record: (u, v, weight, is_non_converged)
+
+        # Step 2: Count converged/non-converged
+        agg = marked.map(lambda x: (1, (x[3], 1 - x[3]))).reduce(
+            lambda a, b: (a[0] + b[0], (a[1][0] + b[1][0], a[1][1] + b[1][1]))
+        )
+        # agg[1][0] = non_converged, agg[1][1] = converged
+        non_converged = agg[1][0]
+
+
+
+        return non_converged

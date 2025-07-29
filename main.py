@@ -57,7 +57,8 @@ def main(args, spark, sc):
     start_partition = time.time()
     df_partitioned = MRPreComputePartition.mapReduce(
         rdd_graph_jaccard, args.num_partitions
-    )
+    ).persist()
+    
     log(f"Partitions computed in {round(time.time() - start_partition, 3)} s")
 
     flag = True
@@ -92,16 +93,14 @@ def main(args, spark, sc):
         start_spark_execution = time.time()
         updated_edges = rdd_updated_edges.collect()
 
-        dict_sliding = {}
-        for edge, sliding in sliding_data.collect():
-            dict_sliding[edge] = sliding
+        dict_sliding = sliding_data.collectAsMap()
         previousSlidingWindow = sc.broadcast(dict_sliding)
 
         converged, non_converged, continued, reduced_edges = CleanUp.reduce_edges(
             n_v, updated_edges
         )
+        rdd_graph_jaccard = sc.parallelize(reduced_edges)
 
-        df_reduced_edges = get_reduced_edges_dataframe(spark, reduced_edges)
 
         it_time = round(time.time() - start_spark_execution, 2)
         log(
@@ -123,29 +122,12 @@ def main(args, spark, sc):
 
             communities = breadth_first_search(singleMachineOutput, n_v)
 
-        rdd_graph_jaccard = df_reduced_edges.rdd
-
-        if flag == False:
-            toc_main = time.time()
-            print("Total time main:", round(toc_main - tic_main, 3), "s")
-
-        # flag = not (non_converged == 0)
-        # rdd_graph_jaccard = df_reduced_edges.rdd
-        # counter += 1
-        # print("Iteration number: ", counter)
-        # if flag == False:
-        #     toc_main = time.time()
-        #     print("Total time main:", round(toc_main - tic_main, 3), "s")
-
-        # print("START Community Detection")
-        # communities = breadth_first_search(reduced_edges, num_vertices)
-        rdd_graph_jaccard = df_reduced_edges.rdd
         counter += 1
 
     log(f"Main time: [bold orange3] {round(time.time() - tic_main, 2)} [/bold orange3]")
 
-    communities = breadth_first_search(reduced_edges, n_v)
 
+    communities = breadth_first_search(reduced_edges, n_v)
     # Save communities to file
     save_communities(communities, args.output_folder, n_v)
 

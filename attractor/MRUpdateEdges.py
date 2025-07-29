@@ -1,5 +1,6 @@
 from pyspark.sql.types import Row
 import numpy as np
+from .MRStarGraphWithPrePartitions import MRStarGraphWithPrePartitions
 
 
 class MRUpdateEdges:
@@ -15,13 +16,13 @@ class MRUpdateEdges:
         tau = tau_
         window_size = window_size_
         iterations_counter = iterations_counter_
-
-        rdd_dynamic_interactions = df_graph_jaccard.union(rdd_dynamic_interactions)
-        union_output = rdd_dynamic_interactions.map(MRUpdateEdges.map_function)
-        union_output = union_output.groupByKey()
-        union_output = union_output.flatMap(MRUpdateEdges.combiner)
-        union_output = union_output.groupByKey()
-        output_rdd = union_output.map(
+        
+      
+        union = df_graph_jaccard.union(rdd_dynamic_interactions)
+        union = union.map(MRUpdateEdges.map_function)
+        reduced = union.reduceByKey(MRStarGraphWithPrePartitions.aggregate_comb)
+        combined = reduced.map(MRUpdateEdges.combiner)
+        output_rdd = combined.map(
             lambda x: MRUpdateEdges.reduce_function(
                 x, tau, window_size, iterations_counter, previousSlidingWindow
             )
@@ -37,40 +38,39 @@ class MRUpdateEdges:
         rdd_edge = rdd_edge[1][0]
         edge_type, target, weight = rdd_edge["type"], rdd_edge["target"], rdd_edge["weight"]
         type_ = edge_type
-
-        edge = Row(center=center, target=target)
-        spec = Row(type=type, weight=weight)
-
-        return (edge, spec)
+        
+        spec = Row(type=type_, weight=weight)
+        return (f"{center}-{target}", [spec])
 
     @staticmethod
     def combiner(edge_with_updates):
+        edge, ups = edge_with_updates
         weight = 0
         containInteractions = False
         result = []
 
-        for update in edge_with_updates[1]:
-            if update.type == "I":
-                weight += update.weight
+        for update in ups:
+            if update["type"] == "I":
+                weight += update["weight"]
                 containInteractions = True
             else:
-                result.append((edge_with_updates[0], update))
+                result.append(update)
 
         if containInteractions:
             spec = Row(type="I", weight=weight)
-            result.append((edge_with_updates[0], spec))
+            result.append(spec)
 
-        return result
+        return (edge, result)
 
     @staticmethod
     def reduce_function(union_data, tau, window_size, iterations_counter, previousSlidingWindow):
-        # union_data is a list of Row (edge, spec)
-        edge, updates = union_data
 
-        if window_size > 0:
-            usingSlidingWindow = True
-        else:
-            usingSlidingWindow = False
+        edge, updates = union_data
+        center, target = edge.split("-")
+        center, target = int(center), int(target)
+        
+        edge = Row(center=center, target=target)
+        usingSlidingWindow = window_size > 0
 
         delta_t = 0
         dis_uv = -1
@@ -103,8 +103,8 @@ class MRUpdateEdges:
             d_t_1 = 1.0
         if d_t_1 < 0:
             d_t_1 = 0.0
-                        
-        return Row(type="G", center=edge.center, target=edge.target, weight=d_t_1), sliding_data
+            
+        return (edge.center, [{'type': 'G', 'target': edge.target, 'weight': d_t_1}]), sliding_data
 
 
     @staticmethod
