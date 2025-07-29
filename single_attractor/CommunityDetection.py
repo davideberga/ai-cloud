@@ -19,94 +19,23 @@ class CommunityDetection:
     precise = 0.0000001
     n_edges_reduce_graph = 0
     n_vertices_reduce_graph = 0
-
-    def setup_graph(self, reduced_edges): #str_filename
-
-        for row in reduced_edges:
-            i_begin = row.center
-            i_end = row.target
-            d_weight = row.weight
-            self.graph.add_edge(i_begin, i_end, d_weight)
-            self.n_edges_reduce_graph += 1
-
-        self.n_vertices_reduce_graph = len(self.graph.m_dict_vertices)
-
-    def initialize_graph(self, graph: Graph) -> Graph:
-        """
-        Pre-compute the common neighbors and exclusive neighbors of every
-        non-converged edges. Pre-compute sumWeight of every node in G(V,E)
-        """
         
-        p_edges = graph.get_all_edges()
-        cnt_check_sum_weight = 0
-        
-        for edge_key, edge_info in p_edges.items():
-            
-            vertex_start, vertex_end = Graph.from_key_to_vertex(edge_key)
-            
-            # Get neighbors of both vertices
-            star_u = graph.m_dict_vertices[vertex_start].pNeighbours
-            star_v = graph.m_dict_vertices[vertex_end].pNeighbours
-            
-            # Count common neighbors using two-pointer technique
-            i, j = 0, 0
-            m, n = len(star_u), len(star_v)
-            
-            no_common_neighbor = 0
-            
-            while i < m and j < n:
-                a = star_u[i]
-                b = star_v[j]
-    
-                if a == b:
-                    no_common_neighbor += 1
-                    i += 1
-                    j += 1
-                elif a > b:
-                    j += 1
-                else:  # a < b
-                    i += 1
-            
-            # Calculate Jaccard distance
-            deg_u = len(star_u) - 1  # Subtract 1 to exclude self
-            deg_v = len(star_v) - 1  # Subtract 1 to exclude self
-            c = no_common_neighbor
-            
-            numerator = float(c)  # Common neighbors
-            denominator = float(deg_u + deg_v + 2 - c)
-            
-            # Jaccard distance = 1 - (intersection / union)
-            dis = 1.0 - numerator / denominator if denominator != 0 else 1.0
-            
-            edge_info.weight = dis
-            
-            graph.update_edge(vertex_start, vertex_end, dis, self.step)
-            graph.add_vertex_weight(vertex_start, dis, self.step)
-            graph.add_vertex_weight(vertex_end, dis, self.step)
-            
-            cnt_check_sum_weight += 1
-        
-    def update_sliding_window(self, previousSlidingWindow) -> None:
+    def update_sliding_window(graph, previousSlidingWindow) -> None:
        
         if not previousSlidingWindow:
             return
         
-        no_loops_mr = min(self.current_loops + 1, self.args.window_size)
+        # key: str'u-v', values: np.array[True, False, ...]
+        for edge, window in previousSlidingWindow.items():
+            key = edge.replace('-', ' ')
 
-        for key, values in previousSlidingWindow: # key: str'u-v', values: np.array[True, False, ...]
-            u = key.split('-')[0]
-            v = key.split('-')[1]
-            edge_key = Graph.refine_edge_key(u, v)
-        
-            if edge_key in self.graph.m_dict_edges:
-                vl = self.graph.m_dict_edges[edge_key]
-                status = []
-                for j in range(3, len(previousSlidingWindow)):
-                    s = int(previousSlidingWindow[j])
-                    assert s == 0 or s == 1
-                    status.append(s)
-                vl.set_sliding_window(no_loops_mr, status)
-        
+            if key in graph.get_all_edges().keys():
+                graph.get_all_edges()[key].sliding_window = window
+                print(f"[Sliding Window Updated] Edge: {key}, Window: {window}")
+            else:
+                print(f"[Edge not found]")
+
+    
     @staticmethod
     def dynamic_interaction(self):
         """
@@ -307,10 +236,12 @@ class CommunityDetection:
 
     @staticmethod
     def execute(reduced_edges, previousSlidingWindow, num_vertices):
-        print("Executing Community Detection...", reduced_edges)
-        print("previousSlidingWindow:", previousSlidingWindow.value)
-        detector = CommunityDetection()
-        detector.setup_graph(reduced_edges)
-        detector.initialize_graph(detector.graph)
-        detector.update_sliding_window(previousSlidingWindow.value)
-        detector.dynamic_interaction()
+        #print("Executing Community Detection...", reduced_edges)
+        #print("previousSlidingWindow:", previousSlidingWindow.value)
+
+        graph_utils = GraphUtils()
+        initialized_graph = graph_utils.init_jaccard_from_rdd(reduced_edges)
+        print(f"get edges: {initialized_graph.get_all_edges()}")
+        CommunityDetection.update_sliding_window(initialized_graph, previousSlidingWindow.value)
+
+        # detector.dynamic_interaction()

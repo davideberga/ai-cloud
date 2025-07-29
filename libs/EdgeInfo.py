@@ -6,20 +6,15 @@ class EdgeInfo:
         self.b_delta_window = None
         self.i_newest_delta_index = 0
         self.a_distance = [0.0] * Settings.STEP_LENGTH
+        self.sliding_window = None
         
         # Assertion per verificare che disuv sia nell'intervallo corretto
         assert 0 <= disuv <= 1, f"disuv deve essere tra 0 e 1, ricevuto: {disuv}"
         
         self.weight = disuv
         
-        # TODO
-        # TreeSet è implementato come set ordinato in Python
-        # In Python, set() è efficiente ma non mantiene l'ordine
-        # Per mantenere l'ordine come TreeSet, si può usare una lista ordinata
-        # o importare from sortedcontainers import SortedSet
         self.pCommonNeighbours = set()
         
-        # Lista di due set per i vicini esclusivi
         self.pExclusiveNeighbours = [set(), set()]
     
     def add_new_delta_2_window(self, d_delta):

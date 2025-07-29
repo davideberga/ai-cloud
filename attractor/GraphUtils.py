@@ -121,8 +121,6 @@ class GraphUtils:
                     
         return graph
     
-  
-    
     def init_jaccard(self, graph_file: str):
         """
             Run Jaccard Distance initialization
@@ -144,14 +142,14 @@ class GraphUtils:
             graph.add_edge(i_begin, i_end, d_weight)
             n_edges_reduce_graph += 1
 
-        return graph,  graph.get_num_edges()
+        return graph, graph.get_num_edges()
     
     def init_jaccard_from_rdd(self, reduced_edges):
         """
             Run Jaccard Distance initialization
         """
     
-        loaded_graph : Graph = self.setup_graph_rdd(reduced_edges)
+        loaded_graph, num_edges = self.setup_graph_rdd(reduced_edges)
         jaccard_initilized_graph = self.initialize_graph(loaded_graph)
         
         return jaccard_initilized_graph
