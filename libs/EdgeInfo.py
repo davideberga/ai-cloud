@@ -1,16 +1,16 @@
 from libs.Settings import Settings
+import numpy as np
 
 class EdgeInfo:
     def __init__(self, disuv):
 
-        self.b_delta_window = None
+        self.deltaWindow = None
         self.i_newest_delta_index = 0
-        self.a_distance = [0.0] * Settings.STEP_LENGTH
+        self.a_distance = [0.0] * 2
         self.sliding_window = None
         
-        # Assertion per verificare che disuv sia nell'intervallo corretto
-        assert 0 <= disuv <= 1, f"disuv deve essere tra 0 e 1, ricevuto: {disuv}"
-        
+        assert 0 <= disuv <= 1, f"disuv have to be between 0 and 1, received: {disuv}"
+
         self.weight = disuv
         
         self.pCommonNeighbours = set()
@@ -18,18 +18,9 @@ class EdgeInfo:
         self.pExclusiveNeighbours = [set(), set()]
     
     def add_new_delta_2_window(self, d_delta):
-        """
-        Aggiunge un nuovo delta alla finestra scorrevole
-        
-        Args:
-            d_delta (float): Il valore delta da aggiungere
-            
-        Returns:
-            float: Il valore delta modificato se necessario
-        """
-        if self.b_delta_window is None:
-            # In Python, possiamo usare una lista di bool o un set per simulare BitSet
-            self.b_delta_window = [False] * 32
+        # add new delta to the sliding window
+        if self.deltaWindow is None:
+            self.deltaWindow = np.zeros((32), dtype=bool)
         
         window_index = self.i_newest_delta_index % Settings.SLIDINNG_WINDOW_SIZE
         

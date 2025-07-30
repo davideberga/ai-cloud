@@ -1,4 +1,4 @@
-import os
+import time
 import math
 from typing import Set
 from libs.Graph import Graph
@@ -8,7 +8,6 @@ from args_parser import parse_arguments
 class CommunityDetection:
 
     step = 0
-   
     current_loops = 0
     begin_point = 0
     end_point = 1
@@ -31,82 +30,42 @@ class CommunityDetection:
 
             if key in graph.get_all_edges().keys():
                 graph.get_all_edges()[key].sliding_window = window
-                print(f"[Sliding Window Updated] Edge: {key}, Window: {window}")
+                #print(f"[Sliding Window Updated] Edge: {key}, Window: {window}")
             else:
                 print(f"[Edge not found]")
 
     
-    @staticmethod
-    def dynamic_interaction(self):
+    def dynamic_interaction(graph):
         """
         Dynamic Interaction main loop.
         """
         b_continue = True
-        p_edges = self.graph.get_all_edges()
-
-        i = 0
-        cnt_loop = self.current_loops
-        loop_single = 0
+        cnt_loop = 0
         
         while b_continue:
             b_continue = False
-            i_next_step = self.step + 1
             print(f"Single Machine Current Loop: {cnt_loop + 1}")
             
-            import time
             tic = time.time() * 1000  # Convert to milliseconds
             i_converge_number = 0
-            
-            for edge_key, p_edge_value in p_edges.items():
-                i_begin = edge_key.center
-                i_end = edge_key.target
-                
-                _dd_di = 0
-                _dd_ei = 0
-                _dd_ci = 0
-                
-                if 0 < p_edge_value.weight[self.step] < 1:
-                    
-                    d_di = CommunityDetection.compute_di(i_begin, i_end, p_edge_value)
-                    d_ci = CommunityDetection.compute_ci(i_begin, i_end, p_edge_value)
-                    d_ei = CommunityDetection.compute_ei(i_begin, i_end, p_edge_value)
-                    
+
+            # For each edge we analize if the distance is significant
+            for key in graph.get_all_edges().keys():
+                if 0 < graph.get_all_edges()[key].aDistance[CommunityDetection.step] < 1:
+                    i_begin, i_end = Graph.from_key_to_vertex(key)
+                    edge_value = graph.get_all_edges()[key]
+                    print(f"Processing edge: {key}, aDistance: {edge_value.aDistance[CommunityDetection.step]}")
+
+                    d_di = CommunityDetection.compute_di(i_begin, i_end, edge_value)
+                    d_ci = CommunityDetection.compute_ci(i_begin, i_end, edge_value)
+                    d_ei = CommunityDetection.compute_ei(i_begin, i_end, edge_value)
+
                     delta = d_di + d_ci + d_ei
-                    _dd_di, _dd_ei, _dd_ci = d_di, d_ei, d_ci
-                    
-                    if abs(delta) > self.precise:
+
+                    if delta > CommunityDetection.precise or delta < -CommunityDetection.precise:
                         # Add delta to delta window of edge
-                        if self.args.window_size > 0:
-                            delta = p_edge_value.add_new_delta_to_window(delta)
-
-                        new_distance = self.graph.weight(i_begin, i_end, self.step) + delta
-
-                        if new_distance > 1 - self.precise:
-                            new_distance = 1
-                        elif new_distance < self.precise:
-                            new_distance = 0
-
-                        self.graph.update_edge(i_begin, i_end, new_distance, i_next_step)
-                        # self.graph.add_vertex_weight(i_begin, new_distance, i_next_step)
-                        # self.graph.add_vertex_weight(i_end, new_distance, i_next_step)
-                        b_continue = True
-                else:
-                    p_edge_value.weight[i_next_step] = p_edge_value.weight[self.step]
-                    new_distance = p_edge_value.weight[self.step]
-                    # self.graph.add_vertex_weight(i_begin, new_distance, i_next_step)
-                    # self.graph.add_vertex_weight(i_end, new_distance, i_next_step)
-                    i_converge_number += 1
-                
-               
-            toc = time.time() * 1000  # Convert to milliseconds
-            cnt_loop += 1
-            loop_single += 1
-            print(f"Single Machine Loop {cnt_loop} Time: {(toc - tic) / 1000:.3f} seconds")
-
-            self.graph.clear_vertex_weight(self.step)
-            self.dictVirtualEdgeTempResult.clear()
-            self.dictInteration[i] = i_converge_number
-            self.step = i_next_step
+                        if CommunityDetection.args.window_size > 0:
+                            delta = edge_value.add_new_delta_2_window(delta)
 
         # Qui c'è da scrivere l'output
 
@@ -241,7 +200,7 @@ class CommunityDetection:
 
         graph_utils = GraphUtils()
         initialized_graph = graph_utils.init_jaccard_from_rdd(reduced_edges)
-        print(f"get edges: {initialized_graph.get_all_edges()}")
+        #print(f"get edges: {initialized_graph.get_all_edges()}")
         CommunityDetection.update_sliding_window(initialized_graph, previousSlidingWindow.value)
 
-        # detector.dynamic_interaction()
+        CommunityDetection.dynamic_interaction(initialized_graph)

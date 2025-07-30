@@ -41,7 +41,6 @@ class Graph:
         if edge_key in self.m_dict_edges:
             return False
         
-        # Assumendo che EdgeInfo sia implementato in un altro file
         self.m_dict_edges[edge_key] = EdgeInfo(d_weight)
         
         self.add_vertex(i_begin, i_end)
