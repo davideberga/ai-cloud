@@ -3,6 +3,7 @@ import time
 import signal, sys
 from args_parser import parse_arguments
 from attractor import GraphUtils
+import gc
 from attractor.GraphUtils import GraphUtils
 from pyspark.sql import SparkSession
 from attractor.MyUtil import MyUtil
@@ -46,12 +47,14 @@ def main(args, spark, sc):
     n_v, n_e = graph_with_jaccard.get_num_vertex(), graph_with_jaccard.get_num_edges()
 
     log(f"[green]Loaded {args.graph_file}, |V|: {n_v}, |E|: {n_e} [/green]")
-
     rdd_graph_jaccard = graph_with_jaccard.get_graph_jaccard_dataframe(spark)
     log(f"Jaccard distance init in {round(time.time() - start_jaccard, 2)} s")
 
     # Broadcast degree datasource
     rdd_graph_degree_broadcasted = sc.broadcast(graph_with_jaccard.get_degree_dict())
+
+    del graph_with_jaccard
+    gc.collect()
 
     # -- Compute Partitions --
     start_partition = time.time()
@@ -64,7 +67,6 @@ def main(args, spark, sc):
     flag = True
     tic_main = time.time()
     counter = 0
-    previousSlidingWindow = None
     while flag:
         # -- PHASE 2.1: Star Graph --
         rdd_star_graph = MRStarGraphWithPrePartitions.mapReduce(
@@ -80,21 +82,17 @@ def main(args, spark, sc):
         )
 
         # -- PHASE 2.3: Update Edges --
-        rdd_updated_edges, sliding_data = MRUpdateEdges.mapReduce(
+        rdd_updated_edges = MRUpdateEdges.mapReduce(
             rdd_graph_jaccard,
             rdd_dynamic_interactions,
             args.tau,
             args.window_size,
             counter,
-            previousSlidingWindow,
         )
 
         # Actual execution of the 3 phases of MapReduce
         start_spark_execution = time.time()
         updated_edges = rdd_updated_edges.collect()
-
-        dict_sliding = sliding_data.collectAsMap()
-        previousSlidingWindow = sc.broadcast(dict_sliding)
 
         converged, non_converged, continued, reduced_edges = CleanUp.reduce_edges(
             n_v, updated_edges
@@ -140,8 +138,19 @@ if __name__ == "__main__":
     try:
         conf = SparkConf()
         conf.setAppName("MRAttractor")
+         # Enable detailed monitoring
         conf.set("spark.sql.adaptive.enabled", "true")
         conf.set("spark.sql.adaptive.coalescePartitions.enabled", "true")
+        conf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+        
+        # Detailed execution metrics
+        conf.set("spark.sql.execution.arrow.pyspark.enabled", "true")
+        conf.set("spark.sql.execution.arrow.pyspark.fallback.enabled", "true")
+        
+        # Memory and GC monitoring
+        conf.set("spark.executor.memory", "4g")
+        conf.set("spark.driver.memory", "2g")
+        conf.set("spark.executor.memoryFraction", "0.8")
 
         spark = SparkSession.builder.config(conf=conf).getOrCreate()
         spark_context = spark.sparkContext

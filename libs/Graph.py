@@ -215,10 +215,11 @@ class Graph:
     def get_graph_jaccard_dataframe(self, spark: SparkSession) -> DataFrame:
         edges_data = []
         edges = self.get_all_edges()
+        vertices_degree = self.get_degree_dict()
         
         for edge_key, edge_value in edges.items():
             vertex_start, vertex_end = Graph.from_key_to_vertex(edge_key)
-            edges_data.append((vertex_start, [{"type": "G", "target": vertex_end, "weight": edge_value.weight}]))
+            edges_data.append((f"{vertex_start}-{vertex_end}", ("G", vertex_end, edge_value.weight, [], )))
         
         return spark.sparkContext.parallelize(edges_data)
     

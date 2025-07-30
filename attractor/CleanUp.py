@@ -13,9 +13,11 @@ class CleanUp:
         
         
         for row in output_update_edges:
-            u = row[0]
-            v = row[1][0]["target"]
-            dis = row[1][0]["weight"]
+            c, t = row[0].split("-")
+            u = int(c)
+            v = int(t)
+            dis = row[1][2]
+        
             if dis < 1 and dis > 0:
                 u -= 1
                 v -= 1
@@ -26,8 +28,9 @@ class CleanUp:
                 converged   += 1
                 
         for row in output_update_edges:
-            u = row[0]
-            v = row[1][0]["target"]
+            c, t = row[0].split("-")
+            u = int(c)
+            v = int(t)
             u -= 1
             v -= 1
             if dirty[u] == 1 or dirty[v] == 1:
@@ -37,8 +40,9 @@ class CleanUp:
         the_number_of_continued_to_used_edges = 0
                 
         for row in output_update_edges:
-            u = row[0]
-            v = row[1][0]["target"]
+            c, t = row[0].split("-")
+            u = int(c)
+            v = int(t)
             u -= 1
             v -= 1
             if dirty[u] == 1 or dirty[v] == 1 or dirty[u] == 2 or dirty[v] == 2:

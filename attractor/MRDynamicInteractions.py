@@ -5,11 +5,13 @@ from attractor.DynamicInteractions import DynamicInteractions
 
 class MRDynamicInteractions:
     @staticmethod
-    def mapReduce(rdd_star_graph, n_partition: int, _lambda_: float, df_degree_broadcasted):
-         
-        
+    def mapReduce(
+        rdd_star_graph, n_partition: int, _lambda_: float, df_degree_broadcasted
+    ):
         intermediate_rdd = rdd_star_graph.flatMap(
-            lambda sg: MRDynamicInteractions.map_function(sg, df_degree_broadcasted.value)
+            lambda sg: MRDynamicInteractions.map_function(
+                sg, df_degree_broadcasted.value
+            )
         )
 
         grouped_by_subgraph = intermediate_rdd.groupByKey()
@@ -19,9 +21,9 @@ class MRDynamicInteractions:
                 part, df_degree_broadcasted.value, n_partition, _lambda_
             )
         )
-        
+
         return computed_dyni
-    
+
     @staticmethod
     def map_function(star_graph, df_degree_broadcasted):
         star = star_graph
@@ -31,15 +33,16 @@ class MRDynamicInteractions:
         triplets = star.triplets
         degree = df_degree_broadcasted.get(center, 0)
 
-
         results = [
             (triplet, Row(center=center, degree=degree, neighbors=neighbors))
             for triplet in triplets
         ]
         return results
-    
+
     @staticmethod
-    def reduce_function(partition: Tuple[str, List], df_degree_broadcasted, n_partitions, lambda_):
+    def reduce_function(
+        partition: Tuple[str, List], df_degree_broadcasted, n_partitions, lambda_
+    ):
         result = []
         listEdges = []
         sum_degree = 0
@@ -51,9 +54,10 @@ class MRDynamicInteractions:
         partition_name, star_graphs = partition
         partition_name_splitted = list(map(int, partition_name.split(" ")))
 
+        excluded = dict()
         for star_graph in star_graphs:
-            center = star_graph.center # prima era u
-            deg_center = star_graph.degree 
+            center = star_graph.center  # prima era u
+            deg_center = star_graph.degree
             neighbors = star_graph.neighbors
 
             sum_degree += deg_center
@@ -61,10 +65,10 @@ class MRDynamicInteractions:
             hash_center = DynamicInteractions.node2hash(center, n_partitions)
 
             for neigh_info in neighbors:
-                neighbor_id = neigh_info.vertex_id # prima era v
+                neighbor_id = neigh_info.vertex_id  # prima era v
                 neighbor_distance = neigh_info.weight
 
-                sumWeight += (1.0 - neighbor_distance)
+                sumWeight += 1.0 - neighbor_distance
 
                 adj = neigh_info
 
@@ -78,8 +82,17 @@ class MRDynamicInteractions:
                         if neighbor_distance < 1 and neighbor_distance > 0:
                             listEdges.append(
                                 Row(
-                                    center=center, neighbor=neighbor_id, weight=neighbor_distance
+                                    center=center,
+                                    neighbor=neighbor_id,
+                                    weight=neighbor_distance,
                                 )
+                            )
+                        else:
+                            excluded[f"{center}-{neighbor_id}"] = (
+                                "I",
+                                neighbor_id,
+                                0,
+                                neigh_info.weight,
                             )
                         main_edges += 1
 
@@ -87,6 +100,7 @@ class MRDynamicInteractions:
                         adjListDictMain[center].append(adj)
                     else:
                         adjListDictMain[center] = [adj]
+
                 else:
                     rear_edges += 1
 
@@ -94,7 +108,7 @@ class MRDynamicInteractions:
                     adjListDictForExclusive[center].append(adj)
                 else:
                     adjListDictForExclusive[center] = [adj]
-            
+
             dictSumWeight[center] = sumWeight
 
         for edge in listEdges:
@@ -114,6 +128,12 @@ class MRDynamicInteractions:
                     partition_name_splitted,
                     lambda_,
                 )
+                key = f"{edge.center}-{edge.neighbor}"
+                if key in excluded.keys():
+                    del excluded[f"{edge.center}-{edge.neighbor}"]
                 result.append(attr)
+
+        for key, v in excluded.items():
+            result.append((key, v))
 
         return result

@@ -16,41 +16,44 @@ class MRStarGraphWithPrePartitions:
         return acc
 
     @staticmethod
-    def aggregate_comb(acc: List, b: List):
-        acc.extend(b)
+    def aggregate_comb(acc: List, b):
+        acc.append(b)
         return acc
 
     @staticmethod
     def mapReduce(df_graph_jaccard, df_partitioned, df_graph_degree):
-        df_graph_jaccard = df_graph_jaccard.flatMap(MRStarGraphWithPrePartitions.both_directions)
-        rdd_mapped = df_graph_jaccard.union(df_partitioned)
-        rdd_mapped = rdd_mapped.reduceByKey(MRStarGraphWithPrePartitions.aggregate_comb)
-        
+        df_graph_jaccard = df_graph_jaccard.flatMap(
+            MRStarGraphWithPrePartitions.both_directions
+        )
+        rdd_mapped = df_graph_jaccard.union(df_partitioned).groupByKey()
         result_rdd = rdd_mapped.flatMap(
             lambda a: MRStarGraphWithPrePartitions.reduce_function(
                 a, df_graph_degree.value
             )
         )
         return result_rdd
-    
+
     @staticmethod
     def both_directions(row):
-        return [row, (row[1][0]['target'], [{'type': 'G', 'target': row[0] , 'weight': row[1][0]['weight']}])]
+        center = int(row[0].split("-")[0])
+        type_, target, weight, _ = row[1]
+        return [(center, (type_, target, weight)), (target, (type_, center, weight))]
 
     # input: vertex_id is the id of the certal node of the star graph
     # output: list of rows with center, neighbors, and triplets
     @staticmethod
     def reduce_function(a, df_graph_degree):
         vertex_id, entries = a
-        
+
         deg_center = df_graph_degree.get(vertex_id, 0)
         neighbors = []
         triplets = []
         for entry in entries:
-            if entry["type"] == "S":
-                triplets.extend(entry["triplets"])
-            elif entry["type"] == "G":
-                neighbors.append((entry["target"], entry["weight"]))
+            if entry[0] == "S":
+                triplets.extend(entry[1])
+            elif entry[0] == "G":
+                type_, target, weight = entry
+                neighbors.append((target, weight))
 
         if len(neighbors) < deg_center:
             return []

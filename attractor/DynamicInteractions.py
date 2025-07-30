@@ -289,4 +289,4 @@ class DynamicInteractions:
             
         delta =  di + sum_ci + sum_ei
 
-        return (u, [{'type': 'I', 'target': v, 'weight': delta}])
+        return (f"{u}-{v}", ( 'I', v, delta, duv))
