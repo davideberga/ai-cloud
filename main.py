@@ -116,10 +116,11 @@ def main(args, spark, sc):
             # ----------------------- PHASE 3: Community Detection ---------------
             # --------------------------------------------------------------------
 
-            print("START Community Detection")
             singleMachineOutput = CommunityDetection.execute(
-                reduced_edges, previousSlidingWindow, n_v
+                reduced_edges, args.window_size, previousSlidingWindow, 
             )
+
+            exit(0)
 
             communities = breadth_first_search(singleMachineOutput, n_v)
 
@@ -160,6 +161,7 @@ if __name__ == "__main__":
         conf.setAppName("MRAttractor")
         conf.set("spark.sql.adaptive.enabled", "true")
         conf.set("spark.sql.adaptive.coalescePartitions.enabled", "true")
+        conf.set("spark.executor.memoryOverhead", "4g")
 
         spark = SparkSession.builder.config(conf=conf).getOrCreate()
         spark_context = spark.sparkContext
@@ -181,6 +183,8 @@ if __name__ == "__main__":
 
         main(args, spark, spark_context)
     except (KeyboardInterrupt, Exception) as e:
+        import traceback
+        traceback.print_exc()
         log(f"[bold red] {e} [/bold red]")
         print("[bold red] Execution interrupted, stopping spark... [/bold red]")
     finally:

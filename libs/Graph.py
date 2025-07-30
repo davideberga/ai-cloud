@@ -17,21 +17,9 @@ class Graph:
         self.END_POINT = 0
 
     def get_num_vertex(self) -> int:
-        """
-        Returns the number of vertices in the graph.
-        
-        Returns:
-            int: Number of vertices
-        """
         return len(self.m_dict_vertices)
     
     def get_num_edges(self) -> int:
-        """
-        Returns the number of edges in the graph.
-        
-        Returns:
-            int: Number of edges
-        """
         return len(self.m_dict_edges)
     
     def add_edge(self, i_begin, i_end, d_weight):
@@ -41,7 +29,7 @@ class Graph:
         if edge_key in self.m_dict_edges:
             return False
         
-        self.m_dict_edges[edge_key] = EdgeInfo(d_weight)
+        self.m_dict_edges[edge_key] = EdgeInfo(i_begin, i_end, d_weight)
         
         self.add_vertex(i_begin, i_end)
         self.add_vertex(i_end, i_begin)
@@ -160,7 +148,7 @@ class Graph:
         for vertex_value in self.m_dict_vertices.values():
             vertex_value.aWeightSum[i_step] = 0
     
-    def get_all_edges(self):
+    def get_all_edges(self) -> Dict[str, EdgeInfo]:
         """
         Restituisce tutti gli archi del grafo.
         
@@ -170,21 +158,6 @@ class Graph:
         return self.m_dict_edges
     
     def get_vertex_neighbours(self, i_vertex_id):
-        """
-        Restituisce i vicini di un vertice.
-        
-        Args:
-            i_vertex_id (int): ID del vertice
-            
-        Returns:
-            list: Lista dei vertici vicini
-            
-        Raises:
-            Exception: Se il vertice non esiste
-        """
-        if i_vertex_id not in self.m_dict_vertices:
-            raise Exception("No such an iVertexId.")
-        
         vertex_value = self.m_dict_vertices[i_vertex_id]
         return vertex_value.pNeighbours
     

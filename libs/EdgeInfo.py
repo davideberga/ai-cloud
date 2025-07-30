@@ -2,7 +2,10 @@ from libs.Settings import Settings
 import numpy as np
 
 class EdgeInfo:
-    def __init__(self, disuv):
+    
+    
+    
+    def __init__(self,vertex_start, vertex_end, disuv):
 
         self.deltaWindow = None
         self.i_newest_delta_index = 0
@@ -11,11 +14,14 @@ class EdgeInfo:
         
         assert 0 <= disuv <= 1, f"disuv have to be between 0 and 1, received: {disuv}"
 
+        
+        self.vertex_start = vertex_start
+        self.vertex_end = vertex_end
+        
         self.weight = disuv
         
-        self.pCommonNeighbours = set()
-        
-        self.pExclusiveNeighbours = [set(), set()]
+        self.common_n = set()
+        self.exclusive_n = [set(), set()]
     
     def add_new_delta_2_window(self, d_delta):
         # add new delta to the sliding window
