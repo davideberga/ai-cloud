@@ -50,17 +50,21 @@ def main(args, spark, sc):
     rdd_graph_jaccard = graph_with_jaccard.get_graph_jaccard_dataframe(spark)
     log(f"Jaccard distance init in {round(time.time() - start_jaccard, 2)} s")
 
-    # Broadcast degree datasource
-    rdd_graph_degree_broadcasted = sc.broadcast(graph_with_jaccard.get_degree_dict())
-
-    del graph_with_jaccard
-    gc.collect()
+    
 
     # -- Compute Partitions --
     start_partition = time.time()
     df_partitioned = MRPreComputePartition.mapReduce(
         rdd_graph_jaccard, args.num_partitions
-    ).persist()
+    )
+    
+    rdd_graph_jaccard.collect()
+    partitions = df_partitioned.collectAsMap()
+    
+    rdd_graph_jaccard = graph_with_jaccard.get_graph_jaccard_dataframe(spark, partitions)
+    
+    del graph_with_jaccard
+    gc.collect()
     
     log(f"Partitions computed in {round(time.time() - start_partition, 3)} s")
 
@@ -68,17 +72,18 @@ def main(args, spark, sc):
     tic_main = time.time()
     counter = 0
     while flag:
+        # print(rdd_graph_jaccard.filter(lambda r: r[0] == '3-2').collect())
         # -- PHASE 2.1: Star Graph --
-        rdd_star_graph = MRStarGraphWithPrePartitions.mapReduce(
-            rdd_graph_jaccard, df_partitioned, rdd_graph_degree_broadcasted
-        )
+        rdd_star_graph = MRStarGraphWithPrePartitions.mapReduce(rdd_graph_jaccard)
+        
+        # print(rdd_star_graph.take(10))
+        # exit(0)
 
         # -- PHASE 2.2: Dynamic Interactions --
         rdd_dynamic_interactions = MRDynamicInteractions.mapReduce(
             rdd_star_graph,
             args.num_partitions,
             args.lambda_,
-            rdd_graph_degree_broadcasted,
         )
 
         # -- PHASE 2.3: Update Edges --
@@ -93,11 +98,17 @@ def main(args, spark, sc):
         # Actual execution of the 3 phases of MapReduce
         start_spark_execution = time.time()
         updated_edges = rdd_updated_edges.collect()
-
+        
+        reassing_partitions = []
+        for (key, data) in updated_edges:
+            center = int(key.split("-")[0])
+            new_data = (*data, tuple(partitions.get(center))) 
+            reassing_partitions.append((key, new_data))
+        
         converged, non_converged, continued, reduced_edges = CleanUp.reduce_edges(
             n_v, updated_edges
         )
-        rdd_graph_jaccard = sc.parallelize(reduced_edges)
+        rdd_graph_jaccard = sc.parallelize(reassing_partitions)
 
 
         it_time = round(time.time() - start_spark_execution, 2)
@@ -125,7 +136,7 @@ def main(args, spark, sc):
     log(f"Main time: [bold orange3] {round(time.time() - tic_main, 2)} [/bold orange3]")
 
 
-    communities = breadth_first_search(reduced_edges, n_v)
+    communities = breadth_first_search(reassing_partitions, n_v)
     # Save communities to file
     save_communities(communities, args.output_folder, n_v)
 

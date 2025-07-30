@@ -212,14 +212,21 @@ class Graph:
         
         return vertex_start, vertex_end
     
-    def get_graph_jaccard_dataframe(self, spark: SparkSession) -> DataFrame:
+    def get_graph_jaccard_dataframe(self, spark: SparkSession, partitioned = None) -> DataFrame:
         edges_data = []
         edges = self.get_all_edges()
         vertices_degree = self.get_degree_dict()
         
         for edge_key, edge_value in edges.items():
             vertex_start, vertex_end = Graph.from_key_to_vertex(edge_key)
-            edges_data.append((f"{vertex_start}-{vertex_end}", ("G", vertex_end, edge_value.weight, [], )))
+            degree_start = vertices_degree.get(vertex_start)
+            degree_end = vertices_degree.get(vertex_end)
+            
+            partitions = []
+            if partitioned is not None:
+                partitions = tuple(partitioned.get(vertex_start))
+            
+            edges_data.append((f"{vertex_start}-{vertex_end}", ["G", vertex_end, edge_value.weight, [], degree_start, degree_end, partitions]))
         
         return spark.sparkContext.parallelize(edges_data)
     

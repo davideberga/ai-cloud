@@ -21,45 +21,60 @@ class MRStarGraphWithPrePartitions:
         return acc
 
     @staticmethod
-    def mapReduce(df_graph_jaccard, df_partitioned, df_graph_degree):
+    def mapReduce(df_graph_jaccard):
         df_graph_jaccard = df_graph_jaccard.flatMap(
             MRStarGraphWithPrePartitions.both_directions
-        )
-        rdd_mapped = df_graph_jaccard.union(df_partitioned).groupByKey()
-        result_rdd = rdd_mapped.flatMap(
-            lambda a: MRStarGraphWithPrePartitions.reduce_function(
-                a, df_graph_degree.value
-            )
-        )
+        ).groupByKey()
+        result_rdd = df_graph_jaccard.flatMap(MRStarGraphWithPrePartitions.reduce_function)
         return result_rdd
 
     @staticmethod
     def both_directions(row):
         center = int(row[0].split("-")[0])
-        type_, target, weight, _ = row[1]
-        return [(center, (type_, target, weight)), (target, (type_, center, weight))]
+        type_, target, weight, sliding, degree_center, degree_target, partitions = row[1]
+        return [
+            (center, (type_, target, weight, sliding, degree_center, degree_target, partitions)),
+            (target, (type_, center, weight, sliding, degree_target, degree_center, partitions)),
+        ]
 
     # input: vertex_id is the id of the certal node of the star graph
     # output: list of rows with center, neighbors, and triplets
     @staticmethod
-    def reduce_function(a, df_graph_degree):
+    def reduce_function(a):
         vertex_id, entries = a
 
-        deg_center = df_graph_degree.get(vertex_id, 0)
         neighbors = []
         triplets = []
         for entry in entries:
-            if entry[0] == "S":
-                triplets.extend(entry[1])
-            elif entry[0] == "G":
-                type_, target, weight = entry
-                neighbors.append((target, weight))
+            type_, target, weight, sliding, degree, degree_neigh, partitions = entry
+            triplets.extend(partitions)
+            neighbors.append((target, weight, degree_neigh, sliding))
+                
 
-        if len(neighbors) < deg_center:
+        if len(neighbors) < degree:
             return []
 
         # sort neighbors by vertex_id
         sorted_neighbors = sorted(neighbors, key=lambda x: x[0])
-        neighbors_row = [Row(vertex_id=vid, weight=w) for vid, w in sorted_neighbors]
+        neighbors_row = [
+            Row(vertex_id=vid, weight=w, degree=deg, sliding=sliding) for vid, w, deg, sliding in sorted_neighbors
+        ]
+        
+        seen = set()
+        result = []
+        for s in triplets:
+            nums = sorted(s.split(), key=int)  # sort numerically
+            sorted_s = " ".join(nums)          # reconstruct string
+            key = frozenset(nums)              # order-independent representation
+            if key not in seen:
+                seen.add(key)
+                result.append(sorted_s)        # append the sorted string
 
-        return [Row(center=vertex_id, neighbors=neighbors_row, triplets=triplets)]
+        return [
+            Row(
+                center=vertex_id,
+                neighbors=neighbors_row,
+                triplets=tuple(result),
+                degree=degree,
+            )
+        ]

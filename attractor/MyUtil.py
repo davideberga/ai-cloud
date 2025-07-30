@@ -19,7 +19,8 @@ def breadth_first_search(output_second_phase, num_vertices):
     adj_list = [[] for _ in range(num_vertices)]
 
     for row in output_second_phase:
-        u, (t, v, weight, sliding) = row
+        u, (t, v, weight, sliding, deg_u, deg_v, partitions) = row
+        u = int(u.split("-")[0])
         dis = 0
         if "0." in str(weight):
             dis = 0

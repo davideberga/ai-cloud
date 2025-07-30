@@ -171,6 +171,8 @@ class DynamicInteractions:
         duv: float,
         partition_name_splitted: List[int],
         lambda_: float,
+        triplets,
+        sliding
     ):
         if duv < 0 or duv > 1:
             return
@@ -289,4 +291,4 @@ class DynamicInteractions:
             
         delta =  di + sum_ci + sum_ei
 
-        return (f"{u}-{v}", ( 'I', v, delta, duv))
+        return (f"{u}-{v}", ( 'I', v, delta, duv, deg_u, deg_v, sliding))

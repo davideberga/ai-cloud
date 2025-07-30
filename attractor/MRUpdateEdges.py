@@ -18,7 +18,7 @@ class MRUpdateEdges:
 
         # union = df_graph_jaccard.union(rdd_dynamic_interactions).groupByKey()
 
-        zero_value = (0, 0, None)  # (current_weight, total_update)
+        zero_value = (0, 0, 0, 0, None)
         union = rdd_dynamic_interactions.aggregateByKey(
             zero_value, MRUpdateEdges.seq_op, MRUpdateEdges.comb_op
         )
@@ -30,66 +30,32 @@ class MRUpdateEdges:
         )
 
         return output_rdd
-
-    @staticmethod
-    def rr(acc, rdd_edge):
-        current_weight, total_update = acc
-        current_weight = rdd_edge[3]
-        total_update += rdd_edge[2]
-
-        return (current_weight, total_update)
-
+    
     @staticmethod
     def seq_op(acc, rdd_edge):
-        current_weight, total_update, sliding = acc
+        current_weight, total_update, deg_center, deg_target, sliding = acc
         current_weight = rdd_edge[3]
         total_update += rdd_edge[2]
-        return (current_weight, total_update, sliding)
+        deg_center = rdd_edge[4]
+        deg_target = rdd_edge[5]
+        sliding = rdd_edge[6]
+        return (current_weight, total_update, deg_center, deg_target, sliding)
 
     @staticmethod
     def comb_op(a, b):
         # merge two accumulators
         current_weight = b[0] if b[0] != 0 else a[0]
         total_update = a[1] + b[1]
-        sliding = a[2] if a[2] is not None else b[2]
-        return (current_weight, total_update, sliding)
-
-    @staticmethod
-    def map_function(rdd_edge):
-        center = rdd_edge[0]
-        sliding = []
-        if len(rdd_edge[1]) > 3:
-            edge_type, target, weight, sliding = rdd_edge[1]
-        else:
-            edge_type, target, weight = rdd_edge[1]
-        return (f"{center}-{target}", (edge_type, weight, sliding))
-
-    @staticmethod
-    def combiner(edge_with_updates):
-        edge, ups = edge_with_updates
-        weight = 0
-        containInteractions = False
-
-        result = []
-        sliding_data = []
-
-        for update in ups:
-            if update[0] == "I":
-                weight += update[2]
-                containInteractions = True
-            else:
-                sliding_data = update[3]
-                result.append(update)
-
-        if containInteractions:
-            result.append(("I", weight))
-
-        result.insert(0, sliding_data)
-        return (edge, result)
+        deg_center =  b[2] if b[2] != 0 else a[2]
+        deg_target =  b[3] if b[3] != 0 else a[3]
+        sliding = a[4] if a[4] is not None else b[4]
+        return (current_weight, total_update, deg_center, deg_target, sliding)
 
     @staticmethod
     def reduce_function(union_data, tau, window_size, iterations_counter):
         edge_raw, updates = union_data
+        
+        # print(updates)
 
         center, target = edge_raw.split("-")
         center, target = int(center), int(target)
@@ -101,31 +67,32 @@ class MRUpdateEdges:
         dis_uv = updates[0]
 
         key = f"{edge.center}-{edge.target}"
-        sliding_data = (key, np.zeros((window_size), dtype=bool))
-
+        deg_center = updates[2]
+        deg_target =  updates[3]
         
 
-        # if usingSlidingWindow and iterations_counter > 0:
-        #     deltaWindow = updates[2]
-        #     # print(deltaWindow)
-        # else:
-        deltaWindow = np.zeros((32), dtype=bool)
+        if usingSlidingWindow and iterations_counter > 0:
+            deltaWindow = updates[4]        
+        else:
+            deltaWindow = np.zeros((window_size), dtype=bool)
 
         if dis_uv < 0:
-            return Row(), sliding_data
+            return (edge_raw, ("G", edge.target, 0, sliding_data, deg_center, deg_target))
 
         if dis_uv < 1 and dis_uv > 0:
             delta_t, sliding_data = MRUpdateEdges.updateDeltaWindow(
                 edge, delta_t, iterations_counter, window_size, deltaWindow, tau
             )
+        else:
+            sliding_data = np.zeros(window_size, dtype=bool)
 
         d_t_1 = dis_uv + delta_t
         if d_t_1 > 1:
             d_t_1 = 1.0
         if d_t_1 < 0:
             d_t_1 = 0.0
-
-        return (edge_raw, ("G", edge.target, d_t_1, sliding_data))
+            
+        return (edge_raw, ("G", edge.target, d_t_1, sliding_data, deg_center, deg_target))
 
     @staticmethod
     def updateDeltaWindow(

@@ -6,42 +6,38 @@ from attractor.DynamicInteractions import DynamicInteractions
 class MRDynamicInteractions:
     @staticmethod
     def mapReduce(
-        rdd_star_graph, n_partition: int, _lambda_: float, df_degree_broadcasted
+        rdd_star_graph, n_partition: int, _lambda_: float,
     ):
-        intermediate_rdd = rdd_star_graph.flatMap(
-            lambda sg: MRDynamicInteractions.map_function(
-                sg, df_degree_broadcasted.value
-            )
-        )
+        intermediate_rdd = rdd_star_graph.flatMap(MRDynamicInteractions.map_function)
 
         grouped_by_subgraph = intermediate_rdd.groupByKey()
 
         computed_dyni = grouped_by_subgraph.flatMap(
             lambda part: MRDynamicInteractions.reduce_function(
-                part, df_degree_broadcasted.value, n_partition, _lambda_
+                part, n_partition, _lambda_
             )
         )
 
         return computed_dyni
 
     @staticmethod
-    def map_function(star_graph, df_degree_broadcasted):
+    def map_function(star_graph):
         star = star_graph
 
         center = star.center
         neighbors = star.neighbors
         triplets = star.triplets
-        degree = df_degree_broadcasted.get(center, 0)
+        degree = star.degree
 
         results = [
-            (triplet, Row(center=center, degree=degree, neighbors=neighbors))
+            (triplet, Row(center=center, degree=degree, neighbors=neighbors, triplets=triplets))
             for triplet in triplets
         ]
         return results
 
     @staticmethod
     def reduce_function(
-        partition: Tuple[str, List], df_degree_broadcasted, n_partitions, lambda_
+        partition: Tuple[str, List], n_partitions, lambda_
     ):
         result = []
         listEdges = []
@@ -56,9 +52,10 @@ class MRDynamicInteractions:
 
         excluded = dict()
         for star_graph in star_graphs:
-            center = star_graph.center  # prima era u
+            center = star_graph.center
             deg_center = star_graph.degree
             neighbors = star_graph.neighbors
+            triplets = star_graph.triplets
 
             sum_degree += deg_center
             sumWeight = 0.0
@@ -67,6 +64,8 @@ class MRDynamicInteractions:
             for neigh_info in neighbors:
                 neighbor_id = neigh_info.vertex_id  # prima era v
                 neighbor_distance = neigh_info.weight
+                neighbor_degree = neigh_info.degree
+                neighbor_edge_sliding = neigh_info.sliding
 
                 sumWeight += 1.0 - neighbor_distance
 
@@ -85,6 +84,10 @@ class MRDynamicInteractions:
                                     center=center,
                                     neighbor=neighbor_id,
                                     weight=neighbor_distance,
+                                    deg_center=deg_center,
+                                    deg_neigh= neighbor_degree,
+                                    triplets=triplets,
+                                    sliding=neighbor_edge_sliding
                                 )
                             )
                         else:
@@ -93,6 +96,9 @@ class MRDynamicInteractions:
                                 neighbor_id,
                                 0,
                                 neigh_info.weight,
+                                deg_center,
+                                neighbor_degree,
+                                neighbor_edge_sliding
                             )
                         main_edges += 1
 
@@ -113,8 +119,8 @@ class MRDynamicInteractions:
 
         for edge in listEdges:
             if edge.weight < 1 and edge.weight > 0:
-                deg_u = df_degree_broadcasted.get(edge.center, 0)
-                deg_v = df_degree_broadcasted.get(edge.neighbor, 0)
+                deg_u = edge.deg_center
+                deg_v = edge.deg_neigh
                 attr = DynamicInteractions.union_intersection(
                     edge.center,
                     edge.neighbor,
@@ -127,6 +133,8 @@ class MRDynamicInteractions:
                     edge.weight,
                     partition_name_splitted,
                     lambda_,
+                    edge.triplets,
+                    edge.sliding
                 )
                 key = f"{edge.center}-{edge.neighbor}"
                 if key in excluded.keys():

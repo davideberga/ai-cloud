@@ -59,4 +59,4 @@ class MRPreComputePartition:
             triple_string = f"{i} {j} {k}"
             triples_data.append(triple_string)
 
-        return (vertex, ("S", triples_data))
+        return (vertex, triples_data)
