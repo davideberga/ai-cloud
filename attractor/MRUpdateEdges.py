@@ -6,7 +6,6 @@ from .MRStarGraphWithPrePartitions import MRStarGraphWithPrePartitions
 class MRUpdateEdges:
     @staticmethod
     def mapReduce(
-        df_graph_jaccard,
         rdd_dynamic_interactions,
         tau_,
         window_size_,
@@ -75,17 +74,14 @@ class MRUpdateEdges:
             deltaWindow = updates[4]        
         else:
             deltaWindow = np.zeros((window_size), dtype=bool)
+            
+        if dis_uv < 0: return (), ()
 
-        if dis_uv < 0:
-            return (edge_raw, ("G", edge.target, 0, sliding_data, deg_center, deg_target))
-
-        if dis_uv < 1 and dis_uv > 0:
-            delta_t, sliding_data = MRUpdateEdges.updateDeltaWindow(
-                edge, delta_t, iterations_counter, window_size, deltaWindow, tau
-            )
+        if dis_uv < 1 and dis_uv > 0  and usingSlidingWindow:
+            delta_t, sliding_data = MRUpdateEdges.updateDeltaWindow(edge, delta_t, iterations_counter, window_size, deltaWindow, tau)
         else:
             sliding_data = np.zeros(window_size, dtype=bool)
-
+        
         d_t_1 = dis_uv + delta_t
         if d_t_1 > 1:
             d_t_1 = 1.0

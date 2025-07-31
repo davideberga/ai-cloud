@@ -44,22 +44,17 @@ class GraphUtils:
                 try:            
                     vertex_start = int(parts[0])
                     vertex_end = int(parts[1])
-                    loaded_graph.add_edge(vertex_start, vertex_end, d_weight=0.0)
+                    loaded_graph.add_edge(vertex_start, vertex_end, 0.0)
                 except ValueError as e:
                     print(f"Error parsing line {line_num + 1}: {line}")
                     raise ValueError(f"Invalid number format in line {line_num + 1}") from e
         
-        # Sort neighbors for each vertex
-        for _, vertex_value in loaded_graph.m_dict_vertices.items():
-            vertex_value.pNeighbours.sort()
+        for k, v in loaded_graph.m_dict_vertices.items():
+            v.neighbours = sorted(v.neighbours)
 
         return loaded_graph
     
     def initialize_graph(self, graph: Graph) -> Graph:
-        """
-        Pre-compute the common neighbors and exclusive neighbors of every
-        non-converged edges. Pre-compute sumWeight of every node in G(V,E)
-        """
         
         p_edges = graph.get_all_edges()
         cnt_check_sum_weight = 0
@@ -67,12 +62,9 @@ class GraphUtils:
         for edge_key, edge_info in p_edges.items():
             
             vertex_start, vertex_end = Graph.from_key_to_vertex(edge_key)
+            star_u = graph.m_dict_vertices[vertex_start].neighbours
+            star_v = graph.m_dict_vertices[vertex_end].neighbours
             
-            # Get neighbors of both vertices
-            star_u = graph.m_dict_vertices[vertex_start].pNeighbours
-            star_v = graph.m_dict_vertices[vertex_end].pNeighbours
-            
-            # Count common neighbors using two-pointer technique
             i, j = 0, 0
             m, n = len(star_u), len(star_v)
             
@@ -90,17 +82,16 @@ class GraphUtils:
                     j += 1
                 else:  # a < b
                     i += 1
-            
-            # Calculate Jaccard distance
-            deg_u = len(star_u) - 1  # Subtract 1 to exclude self
-            deg_v = len(star_v) - 1  # Subtract 1 to exclude self
+                    
+            deg_u = len(star_u) - 1
+            deg_v = len(star_v) - 1
             c = no_common_neighbor
             
-            numerator = float(c)  # Common neighbors
+            numerator = float(c)  
             denominator = float(deg_u + deg_v + 2 - c)
             
             # Jaccard distance = 1 - (intersection / union)
-            dis = 1.0 - numerator / denominator if denominator != 0 else 1.0
+            dis = 1.0 - numerator / denominator
             
             edge_info.weight = dis
             
@@ -110,18 +101,7 @@ class GraphUtils:
             
             cnt_check_sum_weight += 1
         
-        # Debug output if enabled
-        if Settings.DEBUG:
-            with open("graph_jaccard_initilized", 'w') as distance_init_out:
-                for edge_key, edge_info in p_edges.items():
-                    
-                    distance = edge_info.weight
-                    vertex_start, vertex_end = Graph.from_key_to_vertex(edge_key)
-                    distance_init_out.write(f"{vertex_start} {vertex_end} {distance:.6f}\n")
-                    
         return graph
-    
-  
     
     def init_jaccard(self, graph_file: str):
         """
@@ -133,26 +113,54 @@ class GraphUtils:
         
         return jaccard_initilized_graph
     
-    def setup_graph_rdd(self, reduced_edges): #str_filename
+    def setup_graph_rdd(self, reduced_edges, loop_counter): #str_filename
         graph = Graph()
-        n_edges_reduce_graph = 0
-         
-        for row in reduced_edges:
-            i_begin = row.center
-            i_end = row.target
-            d_weight = row.weight
-            graph.add_edge(i_begin, i_end, d_weight)
-            n_edges_reduce_graph += 1
 
-        return graph,  graph.get_num_edges()
+        for row in reduced_edges:
+            start, end = row[0].split('-')
+            start, end = int(start), int(end)
+            w = row[1][2]
+            graph.add_edge(start, end, w)
+            graph.m_dict_edges[row[0]].set_sliding_window(loop_counter, row[1][3])
+
+        return graph
     
-    def init_jaccard_from_rdd(self, reduced_edges):
+    def initialize_graph_rdd(self, graph: Graph) -> Graph:
+        
+        p_edges = graph.get_all_edges()
+        
+        for key, edge in p_edges.items():
+            
+            vertex_start, vertex_end = Graph.from_key_to_vertex(key)
+            distance = edge.weight
+            
+            graph.update_edge(vertex_start, vertex_end, distance, 0)
+            graph.add_vertex_weight(vertex_start, distance, 0)
+            graph.add_vertex_weight(vertex_end, distance, 0)
+            
+            if 0 <  edge.weight < 1:
+                start_neigh = set(graph.get_vertex_neighbours(vertex_start))
+                end_neigh = set(graph.get_vertex_neighbours(vertex_end))
+                
+                # Compute common neighbours
+                comm_n = start_neigh.intersection(end_neigh)
+                edge.common_n = list(comm_n)
+                
+                # Compute exclusive neighbours
+                edge.exclusive_n[0] = start_neigh.difference(comm_n)
+                edge.exclusive_n[1] = end_neigh.difference(comm_n)
+            
+                    
+        return graph
+    
+    def init_jaccard_from_rdd(self, reduced_edges, loop_counter):
         """
             Run Jaccard Distance initialization
         """
     
-        loaded_graph : Graph = self.setup_graph_rdd(reduced_edges)
-        jaccard_initilized_graph = self.initialize_graph(loaded_graph)
+        # loaded_graph  = self.setup_graph()
+        loaded_graph = self.setup_graph_rdd(reduced_edges, loop_counter)
+        jaccard_initilized_graph = self.initialize_graph_rdd(loaded_graph)
         
         return jaccard_initilized_graph
 

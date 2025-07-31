@@ -1,316 +1,200 @@
-import os
+import time
 import math
 from typing import Set
+from libs.Edge import Edge
 from libs.Graph import Graph
 from attractor.GraphUtils import GraphUtils
-from args_parser import parse_arguments
+from pyspark.sql.types import Row
+
 
 class CommunityDetection:
-
-    step = 0
-   
-    current_loops = 0
-    begin_point = 0
-    end_point = 1
-    args = parse_arguments()
-    dictVirtualEdgeTempResult = {}
-    dictInteration = {}
-    limit_size_dict_virtual_edges = -1
-    precise = 0.0000001
-    n_edges_reduce_graph = 0
-    n_vertices_reduce_graph = 0
-
-    def setup_graph(self, reduced_edges): #str_filename
-
-        for row in reduced_edges:
-            i_begin = row.center
-            i_end = row.target
-            d_weight = row.weight
-            self.graph.add_edge(i_begin, i_end, d_weight)
-            self.n_edges_reduce_graph += 1
-
-        self.n_vertices_reduce_graph = len(self.graph.m_dict_vertices)
-
-    def initialize_graph(self, graph: Graph) -> Graph:
-        """
-        Pre-compute the common neighbors and exclusive neighbors of every
-        non-converged edges. Pre-compute sumWeight of every node in G(V,E)
-        """
-        
-        p_edges = graph.get_all_edges()
-        cnt_check_sum_weight = 0
-        
-        for edge_key, edge_info in p_edges.items():
-            
-            vertex_start, vertex_end = Graph.from_key_to_vertex(edge_key)
-            
-            # Get neighbors of both vertices
-            star_u = graph.m_dict_vertices[vertex_start].pNeighbours
-            star_v = graph.m_dict_vertices[vertex_end].pNeighbours
-            
-            # Count common neighbors using two-pointer technique
-            i, j = 0, 0
-            m, n = len(star_u), len(star_v)
-            
-            no_common_neighbor = 0
-            
-            while i < m and j < n:
-                a = star_u[i]
-                b = star_v[j]
-    
-                if a == b:
-                    no_common_neighbor += 1
-                    i += 1
-                    j += 1
-                elif a > b:
-                    j += 1
-                else:  # a < b
-                    i += 1
-            
-            # Calculate Jaccard distance
-            deg_u = len(star_u) - 1  # Subtract 1 to exclude self
-            deg_v = len(star_v) - 1  # Subtract 1 to exclude self
-            c = no_common_neighbor
-            
-            numerator = float(c)  # Common neighbors
-            denominator = float(deg_u + deg_v + 2 - c)
-            
-            # Jaccard distance = 1 - (intersection / union)
-            dis = 1.0 - numerator / denominator if denominator != 0 else 1.0
-            
-            edge_info.weight = dis
-            
-            graph.update_edge(vertex_start, vertex_end, dis, self.step)
-            graph.add_vertex_weight(vertex_start, dis, self.step)
-            graph.add_vertex_weight(vertex_end, dis, self.step)
-            
-            cnt_check_sum_weight += 1
-        
-    def update_sliding_window(self, previousSlidingWindow) -> None:
-       
-        if not previousSlidingWindow:
-            return
-        
-        no_loops_mr = min(self.current_loops + 1, self.args.window_size)
-
-        for key, values in previousSlidingWindow: # key: str'u-v', values: np.array[True, False, ...]
-            u = key.split('-')[0]
-            v = key.split('-')[1]
-            edge_key = Graph.refine_edge_key(u, v)
-        
-            if edge_key in self.graph.m_dict_edges:
-                vl = self.graph.m_dict_edges[edge_key]
-                status = []
-                for j in range(3, len(previousSlidingWindow)):
-                    s = int(previousSlidingWindow[j])
-                    assert s == 0 or s == 1
-                    status.append(s)
-                vl.set_sliding_window(no_loops_mr, status)
-        
     @staticmethod
-    def dynamic_interaction(self):
-        """
-        Dynamic Interaction main loop.
-        """
-        b_continue = True
-        p_edges = self.graph.get_all_edges()
-
-        i = 0
-        cnt_loop = self.current_loops
-        loop_single = 0
-        
-        while b_continue:
-            b_continue = False
-            i_next_step = self.step + 1
-            print(f"Single Machine Current Loop: {cnt_loop + 1}")
-            
-            import time
-            tic = time.time() * 1000  # Convert to milliseconds
-            i_converge_number = 0
-            
-            for edge_key, p_edge_value in p_edges.items():
-                i_begin = edge_key.center
-                i_end = edge_key.target
-                
-                _dd_di = 0
-                _dd_ei = 0
-                _dd_ci = 0
-                
-                if 0 < p_edge_value.weight[self.step] < 1:
-                    
-                    d_di = CommunityDetection.compute_di(i_begin, i_end, p_edge_value)
-                    d_ci = CommunityDetection.compute_ci(i_begin, i_end, p_edge_value)
-                    d_ei = CommunityDetection.compute_ei(i_begin, i_end, p_edge_value)
-                    
-                    delta = d_di + d_ci + d_ei
-                    _dd_di, _dd_ei, _dd_ci = d_di, d_ei, d_ci
-                    
-                    if abs(delta) > self.precise:
-                        # Add delta to delta window of edge
-                        if self.args.window_size > 0:
-                            delta = p_edge_value.add_new_delta_to_window(delta)
-
-                        new_distance = self.graph.weight(i_begin, i_end, self.step) + delta
-
-                        if new_distance > 1 - self.precise:
-                            new_distance = 1
-                        elif new_distance < self.precise:
-                            new_distance = 0
-
-                        self.graph.update_edge(i_begin, i_end, new_distance, i_next_step)
-                        # self.graph.add_vertex_weight(i_begin, new_distance, i_next_step)
-                        # self.graph.add_vertex_weight(i_end, new_distance, i_next_step)
-                        b_continue = True
-                else:
-                    p_edge_value.weight[i_next_step] = p_edge_value.weight[self.step]
-                    new_distance = p_edge_value.weight[self.step]
-                    # self.graph.add_vertex_weight(i_begin, new_distance, i_next_step)
-                    # self.graph.add_vertex_weight(i_end, new_distance, i_next_step)
-                    i_converge_number += 1
-                
-               
-            toc = time.time() * 1000  # Convert to milliseconds
-            cnt_loop += 1
-            loop_single += 1
-            print(f"Single Machine Loop {cnt_loop} Time: {(toc - tic) / 1000:.3f} seconds")
-
-            self.graph.clear_vertex_weight(self.step)
-            self.dictVirtualEdgeTempResult.clear()
-            self.dictInteration[i] = i_converge_number
-            self.step = i_next_step
-
-        # Qui c'è da scrivere l'output
+    def compute_next_step(index):
+        return 1 if index == 0 else 0
 
     @staticmethod
-    def set_union( left: Set[int], right: Set[int]) -> Set[int]:
-        """Set union operation."""
-        return left.union(right)
-
-    @staticmethod
-    def set_difference(left: Set[int], right: Set[int]) -> Set[int]:
-        """Set difference operation."""
-        return left.difference(right)
-    
-    @staticmethod
-    def set_intersection(left, right):
-        """Set intersection operation."""
-        return list(set(left).intersection(set(right)))
-
-    @staticmethod
-    def compute_di(self, i_begin, i_end, p_edge_value) -> float:
-        """Compute Direct Interaction."""
-        return -math.sin(1 - p_edge_value.aDistance[self.step]) * (
-            1 / (len(self.graph.get_vertex_neighbours(i_begin)) - 1) +
-            1 / (len(self.graph.get_vertex_neighbours(i_end)) - 1)
+    def compute_di(graph, v1, v2, edge, step) -> float:
+        return -math.sin(1 - edge.a_distance[step]) * (
+            1 / (len(graph.get_vertex_neighbours(v1)) - 1)
+            + 1 / (len(graph.get_vertex_neighbours(v2)) - 1)
         )
 
     @staticmethod
-    def compute_ci(self, i_begin, i_end, p_edge_value) -> float:
-        """Compute Common Interaction."""
-        
+    def compute_ci(graph: Graph, v1, v2, edge: Edge, step) -> float:
         d_ci = 0
-        
-        for i_shared_vertex in p_edge_value.pCommonNeighbours:
-            # Avoid re-computation
-            if i_begin == i_shared_vertex or i_end == i_shared_vertex:
+
+        for shared in edge.common_n:
+            if v1 == shared or v2 == shared:
                 continue
 
-            d_begin = self.graph.weight(i_begin, i_shared_vertex, self.step)
-            d_end = self.graph.weight(i_end, i_shared_vertex, self.step)
-            
-            d_ci += (math.sin(1 - d_begin) * (1 - d_end) / (len(self.graph.get_vertex_neighbours(i_begin)) - 1) +
-                     math.sin(1 - d_end) * (1 - d_begin) / (len(self.graph.get_vertex_neighbours(i_end)) - 1))
-        
+            distance_1 = graph.distance(v1, shared, step)
+            distance_2 = graph.distance(v2, shared, step)
+
+            d_ci += math.sin(1 - distance_1) * (1 - distance_2) / (
+                len(graph.get_vertex_neighbours(v1)) - 1
+            ) + math.sin(1 - distance_2) * (1 - distance_1) / (
+                len(graph.get_vertex_neighbours(v2)) - 1
+            )
+
         return -d_ci
 
     @staticmethod
-    def compute_ei(self, i_begin: int, i_end: int, p_edge_value) -> float:
-        """Compute Exclusive Interaction."""
+    def compute_ei(
+        graph: Graph, v1, v2, edge: Edge, step: int, temp_result: dict
+    ) -> float:
         d_ei = 0
 
-        d_ei += (CommunityDetection.compute_partial_ei(i_begin, i_end, p_edge_value.pExclusiveNeighbours[self.begin_point]) +
-                 CommunityDetection.compute_partial_ei(i_end, i_begin, p_edge_value.pExclusiveNeighbours[self.end_point]))
+        d_ei += CommunityDetection.compute_partial_ei(
+            graph, v1, v2, edge.exclusive_n[0], step, temp_result
+        ) + CommunityDetection.compute_partial_ei(
+            graph, v2, v1, edge.exclusive_n[1], step, temp_result
+        )
 
         return -d_ei
 
     @staticmethod
-    def compute_partial_ei(self, i_target: int, i_target_neighbour: int, target_en: Set[int]) -> float:
-        """Compute partial Exclusive Interaction."""
+    def compute_partial_ei(
+        graph: Graph, v1: int, v2: int, exclN: Set[int], step: int, temp_result: dict
+    ) -> float:
         d_distance = 0
-        
-        for vertex in target_en:
-            d_distance += (math.sin(1 - self.graph.weight(vertex, i_target, self.step)) *
-                          CommunityDetection.compute_influence(i_target_neighbour, vertex, i_target) /
-                          (len(self.graph.get_vertex_neighbours(i_target)) - 1))
+        for vertex in exclN:
+            d_distance += (
+                math.sin(1 - graph.distance(vertex, v1, step))
+                * CommunityDetection.compute_influence(
+                    graph, v2, vertex, step, temp_result
+                )
+                / (len(graph.get_vertex_neighbours(v1)) - 1)
+            )
 
         return d_distance
 
     @staticmethod
-    def compute_influence(self, i_target_neighbour: int, i_en_vertex: int, i_target: int) -> float:
-        """Compute influence between vertices."""
-        d_distance = 1 - CommunityDetection.compute_virtual_distance(i_target_neighbour, i_en_vertex, i_target)
-
-        if d_distance >= self.args.lambda_:
-            return d_distance
-
-        return d_distance - self.args.lambda_
+    def compute_influence(
+        graph: Graph, v1: int, v2: int, step: int, temp_result: dict
+    ) -> float:
+        lambda_ = 0.5
+        distance = 1 - CommunityDetection.compute_virtual_distance(
+            graph, v1, v2, step, temp_result
+        )
+        return distance if distance >= lambda_ else distance - lambda_
 
     @staticmethod
-    def compute_exclusive_neighbour(self,i_begin, i_end, p_edge_value) -> None:
-        """Compute exclusive neighbors."""
-        p_edge_value.pExclusiveNeighbours[self.begin_point] = CommunityDetection.set_difference(
-            self.graph.get_vertex_neighbours(i_begin), p_edge_value.pCommonNeighbours
-        )
-        p_edge_value.pExclusiveNeighbours[self.end_point] = CommunityDetection.set_difference(
-            self.graph.get_vertex_neighbours(i_end), p_edge_value.pCommonNeighbours
-        )
+    def compute_virtual_distance(
+        graph: Graph, v1: int, v2: int, step: int, temp_result: dict
+    ) -> float:
+        edge_key = Graph.refine_edge_key(v1, v2)
 
-    def compute_common_neighbour(self, i_begin, i_end, p_edge_value) -> None:
-        """Compute common neighbors."""
-        print(f"self.graph.m_dict_vertices[i_begin].pNeighbours: {self.graph.m_dict_vertices[i_begin].pNeighbours}")
-        p_edge_value.pCommonNeighbours = CommunityDetection.set_intersection(
-            self.graph.m_dict_vertices[i_begin].pNeighbours,
-            self.graph.m_dict_vertices[i_end].pNeighbours
-        )
-
-    @staticmethod
-    def compute_virtual_distance(self, i_begin: int, i_end: int, i_target: int) -> float:
-        """Compute virtual distance between vertices."""
-        i_temp_begin = i_begin
-        i_temp_end = i_end
-        
-        edge_key = Graph.refine_edge_key(i_temp_begin, i_temp_end)
-
-        if edge_key in self.dictVirtualEdgeTempResult:
-            return self.dictVirtualEdgeTempResult[edge_key]
+        if edge_key in temp_result.keys():
+            return temp_result[edge_key]
 
         d_numerator = 0
-        p_begin_neighbours = self.graph.get_vertex_neighbours(i_begin)
-        p_end_neighbours = self.graph.get_vertex_neighbours(i_end)
+        v1_neigh, v2_neigh = (
+            graph.get_vertex_neighbours(v1),
+            graph.get_vertex_neighbours(v2),
+        )
 
-        set_common_neighbours = CommunityDetection.set_intersection(p_begin_neighbours, p_end_neighbours)
-        
-        for vertex in set_common_neighbours:
-            d_begin = self.graph.weight(i_begin, vertex, self.step)
-            d_end = self.graph.weight(i_end, vertex, self.step)
-            d_numerator += (1 - d_begin) + (1 - d_end)
+        common_n = list(set(v1_neigh).intersection(set(v2_neigh)))
 
-        d_denominator = (self.graph.get_vertex_weight_sum(i_begin, self.step) +
-                        self.graph.get_vertex_weight_sum(i_end, self.step))
+        for vertex in common_n:
+            d_numerator += (1 - graph.distance(v1, vertex, step)) + (
+                1 - graph.distance(v2, vertex, step)
+            )
 
-        d_distance = 1 - d_numerator / d_denominator
+        d_denominator = graph.get_vertex_weight_sum(
+            v1, step
+        ) + graph.get_vertex_weight_sum(v2, step)
 
-        if len(self.dictVirtualEdgeTempResult) < self.limit_size_dict_virtual_edges:
-            self.dictVirtualEdgeTempResult[edge_key] = d_distance
-
-        return d_distance
+        distance = 1 - d_numerator / d_denominator
+        temp_result[edge_key] = distance
+        return distance
 
     @staticmethod
-    def execute(reduced_edges, previousSlidingWindow, num_vertices):
-        print("Executing Community Detection...", reduced_edges)
-        print("previousSlidingWindow:", previousSlidingWindow.value)
-        detector = CommunityDetection()
-        detector.setup_graph(reduced_edges)
-        detector.initialize_graph(detector.graph)
-        detector.update_sliding_window(previousSlidingWindow.value)
-        detector.dynamic_interaction()
+    def dynamic_interaction(graph: Graph, win_size: int):
+        PRECISE = 0.0000001
+
+        loop_counter = 0
+        current_step = 0
+        dictVirtEdges = dict()
+
+        b_continue = True
+
+        while b_continue:
+            b_continue = False
+
+            next_step = CommunityDetection.compute_next_step(current_step)
+            edges_converged_number = 0
+
+            p_edges = graph.get_all_edges()
+            for edge_key, edge_value in p_edges.items():
+                v_start = edge_value.vertex_start
+                v_end = edge_value.vertex_end
+
+                di, ci, ei = 0, 0, 0
+
+                if 0 < edge_value.a_distance[current_step] < 1:
+                    di = CommunityDetection.compute_di(
+                        graph, v_start, v_end, edge_value, current_step
+                    )
+                    ci = CommunityDetection.compute_ci(
+                        graph, v_start, v_end, edge_value, current_step
+                    )
+                    ei = CommunityDetection.compute_ei(
+                        graph, v_start, v_end, edge_value, current_step, dictVirtEdges
+                    )
+
+                    delta = di + ci + ei
+
+                    if abs(delta) > PRECISE:
+                        # Add delta to delta window of edge
+                        if win_size > 0:
+                            delta = edge_value.add_new_delta_2_window(delta, win_size)
+
+                        new_distance = (
+                            graph.distance(v_start, v_end, current_step) + delta
+                        )
+                        if new_distance > 1 - PRECISE:
+                            new_distance = 1
+                        elif new_distance < PRECISE:
+                            new_distance = 0
+
+                        graph.update_edge(v_start, v_end, new_distance, next_step)
+                        graph.add_vertex_weight(v_start, new_distance, next_step)
+                        graph.add_vertex_weight(v_end, new_distance, next_step)
+                        b_continue = True
+                else:
+                    edge_value.a_distance[next_step] = edge_value.a_distance[
+                        current_step
+                    ]
+                    new_distance = edge_value.a_distance[current_step]
+                    graph.add_vertex_weight(v_start, new_distance, next_step)
+                    graph.add_vertex_weight(v_end, new_distance, next_step)
+                    edges_converged_number += 1
+
+            loop_counter += 1
+
+            graph.clear_vertex_weight(current_step)
+            dictVirtEdges = dict()
+            current_step = CommunityDetection.compute_next_step(current_step)
+
+        p_edges = graph.get_all_edges()
+        res = []
+        for key, edge in p_edges.items():
+            vertex_start, vertex_end = Graph.from_key_to_vertex(key)
+            (
+                res.append(
+                    (
+                        Graph.refine_edge_key(vertex_start, vertex_end),
+                        ("G", vertex_end, edge.a_distance[current_step], [], -1, -1),
+                    )
+                ),
+            )
+
+        return res
+
+    @staticmethod
+    def execute(reduced_edges, window_size, current_loop):
+        graph_utils = GraphUtils()
+        initialized_graph = graph_utils.init_jaccard_from_rdd(
+            reduced_edges, current_loop
+        )
+        return CommunityDetection.dynamic_interaction(initialized_graph, window_size)

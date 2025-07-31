@@ -23,7 +23,7 @@ from attractor.MRDynamicInteractions import (
     MRDynamicInteractions,
 )
 import warnings
-from attractor.MyUtil import breadth_first_search, save_communities
+from attractor.MyUtil import connected_components, save_communities
 from rich import print
 
 warnings.filterwarnings("ignore")
@@ -38,6 +38,12 @@ def log(message: str):
 
 def main(args, spark, sc):
     MyUtil.delete_path(args.output_folder)
+    
+    # reduced_edges, ff  = CommunityDetection.execute(
+    #     args.graph_file, args.window_size, 0, None, 
+    # )
+    # communities = breadth_first_search(reduced_edges, ff)
+    # exit(0)
 
     # -- PHASE 1: graph loading and computing jaccard Distance --
     graph_initilizer = GraphUtils()
@@ -78,6 +84,10 @@ def main(args, spark, sc):
         
         # print(rdd_star_graph.take(10))
         # exit(0)
+        
+        res_star = rdd_star_graph.collect()
+        print("Stra graph")
+        rdd_star_graph = sc.parallelize(res_star)
 
         # -- PHASE 2.2: Dynamic Interactions --
         rdd_dynamic_interactions = MRDynamicInteractions.mapReduce(
@@ -85,10 +95,13 @@ def main(args, spark, sc):
             args.num_partitions,
             args.lambda_,
         )
+        
+        res_dyn = rdd_dynamic_interactions.collect()
+        print("Dyn int")
+        rdd_dynamic_interactions = sc.parallelize(res_dyn)
 
         # -- PHASE 2.3: Update Edges --
         rdd_updated_edges = MRUpdateEdges.mapReduce(
-            rdd_graph_jaccard,
             rdd_dynamic_interactions,
             args.tau,
             args.window_size,
@@ -120,24 +133,22 @@ def main(args, spark, sc):
         flag = not (non_converged == 0)
         if non_converged < args.gamma:
             flag = False
-
-            # --------------------------------------------------------------------
-            # ----------------------- PHASE 3: Community Detection ---------------
-            # --------------------------------------------------------------------
-
-            print("START Community Detection")
-            singleMachineOutput = CommunityDetection.execute(
-                reduced_edges, previousSlidingWindow, n_v
+            
+            updated_edges = CommunityDetection.execute(
+                reduced_edges, args.window_size, counter
             )
+            
+            break
 
-            communities = breadth_first_search(singleMachineOutput, n_v)
+        if not flag:
+            toc_main = time.time()
+            print("Total time main:", round(toc_main - tic_main, 3), "s")
 
         counter += 1
 
     log(f"Main time: [bold orange3] {round(time.time() - tic_main, 2)} [/bold orange3]")
+    communities = connected_components(updated_edges, n_v)
 
-
-    communities = breadth_first_search(reassing_partitions, n_v)
     # Save communities to file
     save_communities(communities, args.output_folder, n_v)
 
@@ -163,6 +174,7 @@ if __name__ == "__main__":
         conf.set("spark.executor.memory", "4g")
         conf.set("spark.driver.memory", "2g")
         conf.set("spark.executor.memoryFraction", "0.8")
+
 
         spark = SparkSession.builder.config(conf=conf).getOrCreate()
         spark_context = spark.sparkContext
