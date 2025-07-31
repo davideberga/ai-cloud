@@ -1,24 +1,26 @@
 import time
 import math
 from typing import Set
-from libs.EdgeInfo import EdgeInfo
+from libs.Edge import Edge
 from libs.Graph import Graph
 from attractor.GraphUtils import GraphUtils
-from args_parser import parse_arguments
+from pyspark.sql.types import Row
 
 
 class CommunityDetection:
     @staticmethod
-    def update_sliding_window(graph, previousSlidingWindow) -> None:
+    def update_sliding_window(graph: Graph, loop_counter: int, window_size: int, previousSlidingWindow) -> None:
         if not previousSlidingWindow:
             return
+        
+        loop_counter = min(loop_counter + 1, window_size)
 
         # key: str'u-v', values: np.array[True, False, ...]
         for edge, window in previousSlidingWindow.items():
             key = edge.replace("-", " ")
 
             if key in graph.get_all_edges().keys():
-                graph.get_all_edges()[key].sliding_window = window
+                graph.get_all_edges()[key].set_sliding_window(loop_counter, window)
                 # print(f"[Sliding Window Updated] Edge: {key}, Window: {window}")
             else:
                 print(f"[Edge not found]")
@@ -28,21 +30,6 @@ class CommunityDetection:
         return 1 if index == 0 else 0
 
     @staticmethod
-    def set_union(left: Set[int], right: Set[int]) -> Set[int]:
-        """Set union operation."""
-        return left.union(right)
-
-    @staticmethod
-    def set_difference(left: Set[int], right: Set[int]) -> Set[int]:
-        """Set difference operation."""
-        return left.difference(right)
-
-    @staticmethod
-    def set_intersection(left, right):
-        """Set intersection operation."""
-        return list(set(left).intersection(set(right)))
-
-    @staticmethod
     def compute_di(graph, v1, v2, edge, step) -> float:
         return -math.sin(1 - edge.a_distance[step]) * (
             1 / (len(graph.get_vertex_neighbours(v1)) - 1)
@@ -50,7 +37,7 @@ class CommunityDetection:
         )
 
     @staticmethod
-    def compute_ci(graph: Graph, v1, v2, edge: EdgeInfo, step) -> float:
+    def compute_ci(graph: Graph, v1, v2, edge: Edge, step) -> float:
         d_ci = 0
 
         for shared in edge.common_n:
@@ -62,7 +49,7 @@ class CommunityDetection:
 
             d_ci += math.sin(1 - distance_1) * (1 - distance_2) / (
                 len(graph.get_vertex_neighbours(v1)) - 1
-            ) + math.sin(distance_2) * (1 - distance_1) / (
+            ) + math.sin(1 - distance_2) * (1 - distance_1) / (
                 len(graph.get_vertex_neighbours(v2)) - 1
             )
 
@@ -70,9 +57,8 @@ class CommunityDetection:
 
     @staticmethod
     def compute_ei(
-        graph: Graph, v1, v2, edge: EdgeInfo, step: int, temp_result: dict
+        graph: Graph, v1, v2, edge: Edge, step: int, temp_result: dict
     ) -> float:
-        """Compute Exclusive Interaction."""
         d_ei = 0
 
         d_ei += CommunityDetection.compute_partial_ei(
@@ -115,7 +101,7 @@ class CommunityDetection:
     ) -> float:
         edge_key = Graph.refine_edge_key(v1, v2)
 
-        if edge_key in temp_result:
+        if edge_key in temp_result.keys():
             return temp_result[edge_key]
 
         d_numerator = 0
@@ -124,11 +110,11 @@ class CommunityDetection:
             graph.get_vertex_neighbours(v2),
         )
 
-        common_n = CommunityDetection.set_intersection(v1_neigh, v2_neigh)
+        common_n = list(set(v1_neigh).intersection(set(v2_neigh)))
 
         for vertex in common_n:
             d_numerator += (1 - graph.distance(v1, vertex, step)) + (
-                1 - graph.weight(v2, vertex, step)
+                1 - graph.distance(v2, vertex, step)
             )
 
         d_denominator = graph.get_vertex_weight_sum(
@@ -140,31 +126,6 @@ class CommunityDetection:
         return distance
 
     @staticmethod
-    def compute_exclusive_neighbour(self, i_begin, i_end, p_edge_value) -> None:
-        """Compute exclusive neighbors."""
-        p_edge_value.pExclusiveNeighbours[self.begin_point] = (
-            CommunityDetection.set_difference(
-                self.graph.get_vertex_neighbours(i_begin),
-                p_edge_value.pCommonNeighbours,
-            )
-        )
-        p_edge_value.pExclusiveNeighbours[self.end_point] = (
-            CommunityDetection.set_difference(
-                self.graph.get_vertex_neighbours(i_end), p_edge_value.pCommonNeighbours
-            )
-        )
-
-    def compute_common_neighbour(self, i_begin, i_end, p_edge_value) -> None:
-        """Compute common neighbors."""
-        print(
-            f"self.graph.m_dict_vertices[i_begin].pNeighbours: {self.graph.m_dict_vertices[i_begin].pNeighbours}"
-        )
-        p_edge_value.pCommonNeighbours = CommunityDetection.set_intersection(
-            self.graph.m_dict_vertices[i_begin].pNeighbours,
-            self.graph.m_dict_vertices[i_end].pNeighbours,
-        )
-
-    @staticmethod
     def dynamic_interaction(graph: Graph, win_size: int):
         PRECISE = 0.0000001
 
@@ -173,10 +134,6 @@ class CommunityDetection:
         dictVirtEdges = dict()
 
         b_continue = True
-
-        i = 0
-
-        loop_single = 0
 
         while b_continue:
             b_continue = False
@@ -207,40 +164,58 @@ class CommunityDetection:
                     if abs(delta) > PRECISE:
                         # Add delta to delta window of edge
                         if win_size > 0:
-                            delta = edge_value.add_new_delta_to_window(delta)
+                            delta = edge_value.add_new_delta_2_window(delta, win_size)
 
                         new_distance = (
-                            graph.weight(v_start, v_end, current_step) + delta
+                            graph.distance(v_start, v_end, current_step) + delta
                         )
-                        new_distance = int(new_distance > PRECISE)
+                        if new_distance > 1 - PRECISE:
+                            new_distance = 1
+                        elif new_distance < PRECISE:
+                            new_distance = 0
 
                         graph.update_edge(v_start, v_end, new_distance, next_step)
                         graph.add_vertex_weight(v_start, new_distance, next_step)
                         graph.add_vertex_weight(v_end, new_distance, next_step)
                         b_continue = True
                 else:
-                    edge_value.weight[next_step] = edge_value.weight[current_step]
-                    new_distance = edge_value.weight[current_step]
+                    edge_value.a_distance[next_step] = edge_value.a_distance[
+                        current_step
+                    ]
+                    new_distance = edge_value.a_distance[current_step]
                     graph.add_vertex_weight(v_start, new_distance, next_step)
                     graph.add_vertex_weight(v_end, new_distance, next_step)
                     edges_converged_number += 1
 
-            cnt_loop += 1
-            loop_single += 1
-            # print(f"Single Machine Loop {cnt_loop} Time: {(toc - tic) / 1000:.3f} seconds")
+            loop_counter += 1
 
             graph.clear_vertex_weight(current_step)
             dictVirtEdges = dict()
             current_step = CommunityDetection.compute_next_step(current_step)
 
-        # Qui c'è da scrivere l'output
+        p_edges = graph.get_all_edges()
+        res = []
+        for key, edge in p_edges.items():
+            vertex_start, vertex_end = Graph.from_key_to_vertex(key)
+            (
+                res.append(
+                    Row(
+                        type="G",
+                        center=vertex_start,
+                        target=vertex_end,
+                        weight=edge.a_distance[current_step],
+                    )
+                ),
+            )
+
+        return res
 
     @staticmethod
-    def execute(reduced_edges, window_size, previousSlidingWindow):
+    def execute(reduced_edges, window_size, current_loop, previousSlidingWindow):
         graph_utils = GraphUtils()
         initialized_graph = graph_utils.init_jaccard_from_rdd(reduced_edges)
 
         CommunityDetection.update_sliding_window(
-            initialized_graph, previousSlidingWindow.value
+            initialized_graph, current_loop, window_size, previousSlidingWindow
         )
-        CommunityDetection.dynamic_interaction(initialized_graph, window_size)
+        return CommunityDetection.dynamic_interaction(initialized_graph, window_size), initialized_graph.get_num_vertex()

@@ -93,9 +93,9 @@ class MRUpdateEdges:
             elif type == "I":
                 delta_t += weight                     
         
-        if dis_uv < 0: return Row(), sliding_data
+        if dis_uv < 0: return (), ()
         
-        if dis_uv < 1 and dis_uv > 0: 
+        if dis_uv < 1 and dis_uv > 0 and usingSlidingWindow: 
             delta_t, sliding_data = MRUpdateEdges.updateDeltaWindow(edge, delta_t, iterations_counter, window_size, deltaWindow, tau)
 
         d_t_1 = dis_uv + delta_t

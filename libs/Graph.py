@@ -1,7 +1,7 @@
 from typing import Dict, Tuple
 from attractor.DataframeSchemaProvider import DataframeSchemaProvider
-from libs.VertexValue_v2 import VertexValue_v2
-from libs.EdgeInfo import EdgeInfo
+from libs.Vertex import Vertex
+from libs.Edge import Edge
 from libs.Settings import EdgeTypeEnum
 from pyspark.sql.dataframe import DataFrame
 from pyspark.sql import Row
@@ -10,8 +10,8 @@ from libs.Settings import Settings
 
 class Graph:
     def __init__(self):
-        self.m_dict_edges = {}  # HashMap<String, EdgeInfo>
-        self.m_dict_vertices = {}  # HashMap<Integer, VertexValue_v2>
+        self.m_dict_edges: Dict[str, Edge] = {}  # Dict<String, EdgeInfo>
+        self.m_dict_vertices: Dict[str, Vertex] = {}  # HashMap<Integer, VertexValue_v2>
         
         self.BEGIN_POINT = 0
         self.END_POINT = 0
@@ -22,159 +22,68 @@ class Graph:
     def get_num_edges(self) -> int:
         return len(self.m_dict_edges)
     
-    def add_edge(self, i_begin, i_end, d_weight):
-        # Add edge to the graph
-        edge_key = self.refine_edge_key(i_begin, i_end)
-        
+    def add_edge(self, v1, v2, weight):
+        edge_key = self.refine_edge_key(v1, v2)
         if edge_key in self.m_dict_edges:
-            return False
+            return 
         
-        self.m_dict_edges[edge_key] = EdgeInfo(i_begin, i_end, d_weight)
+        self.m_dict_edges[edge_key] = Edge(v1, v2, weight)
+        self.add_vertex(v1, v2)
+        self.add_vertex(v2, v1)
         
-        self.add_vertex(i_begin, i_end)
-        self.add_vertex(i_end, i_begin)
-        
-        return True
-    
-    def update_edge(self, i_begin, i_end, d_new_distance, i_step):
-        """
-        Aggiorna la distanza di un arco per uno step specifico.
-        
-        Args:
-            i_begin (int): Vertice di inizio
-            i_end (int): Vertice di fine
-            d_new_distance (float): Nuova distanza
-            i_step (int): Step dell'array di distanze
+    def add_vertex(self, v, neighbour):
+        if v not in self.m_dict_vertices:
+            vl = Vertex()
+            vl.neighbours.add(v)
+            self.m_dict_vertices[v] = vl
             
-        Raises:
-            Exception: Se l'arco non esiste
-        """
-        edge_key = self.refine_edge_key(i_begin, i_end)
+        self.m_dict_vertices[v].neighbours.add(neighbour)
         
+    def get_vertex_neighbours(self, v):
+        if v not in self.m_dict_vertices: raise KeyError("Vertex not found")
+        return self.m_dict_vertices[v].neighbours
+    
+    def update_edge(self, v1, v2, distance, step):
+        edge_key = self.refine_edge_key(v1, v2)
         if edge_key not in self.m_dict_edges:
             raise Exception("No Such Edges")
-        
-        self.m_dict_edges[edge_key].a_distance[i_step] = d_new_distance
+        self.m_dict_edges[edge_key].a_distance[step] = distance
     
-    def distance(self, i_begin, i_end, i_step):
-        """
-        Restituisce la distanza tra due vertici per uno step specifico.
+    def add_vertex_weight(self, v, distance, step):
+        if v not in self.m_dict_vertices:
+            raise Exception("Vertex is not exist.")
         
-        Args:
-            i_begin (int): Vertice di inizio
-            i_end (int): Vertice di fine
-            i_step (int): Step dell'array di distanze
-            
-        Returns:
-            float: Distanza tra i vertici
-            
-        Raises:
-            Exception: Se l'arco non esiste
-        """
-        if i_begin == i_end:
+        self.m_dict_vertices[v].aWeightSum[step] += 1 - distance
+    
+    def distance(self, v1, v2, step):
+        if v1 == v2:
             return 0
-        
-        edge_key = self.refine_edge_key(i_begin, i_end)
-        
+        edge_key = self.refine_edge_key(v1, v2)
         if edge_key not in self.m_dict_edges:
+            print(edge_key)
             raise Exception("No edge")
-        
-        return self.m_dict_edges[edge_key].a_distance[i_step]
+        return self.m_dict_edges[edge_key].a_distance[step]
     
-    def weight(self, i_begin, i_end):
-        """
-        Restituisce il peso di un arco.
-        
-        Args:
-            i_begin (int): Vertice di inizio
-            i_end (int): Vertice di fine
-            
-        Returns:
-            float: Peso dell'arco o 0.0 se non esiste
-        """
-        if i_begin == i_end:
+    def weight(self, v1, v2):
+        if v1 == v2:
             return 0.0
-        
-        edge_key = self.refine_edge_key(i_begin, i_end)
-        
+        edge_key = self.refine_edge_key(v1, v2)
         if edge_key not in self.m_dict_edges:
             return 0.0
         
         return self.m_dict_edges[edge_key].weight
     
-    def get_vertex_weight_sum(self, i_vertex_id, i_step):
-        """
-        Restituisce la somma dei pesi per un vertice e step specifico.
-        
-        Args:
-            i_vertex_id (int): ID del vertice
-            i_step (int): Step dell'array
-            
-        Returns:
-            float: Somma dei pesi
-            
-        Raises:
-            Exception: Se il vertice non esiste
-        """
-        if i_vertex_id not in self.m_dict_vertices:
+    def get_vertex_weight_sum(self, v1, step):
+        if v1 not in self.m_dict_vertices:
             raise Exception("Vertex is not exist.")
-        
-        return self.m_dict_vertices[i_vertex_id].aWeightSum[i_step]
-    
-    def add_vertex_weight(self, i_vertex_id, d_distance, i_step):
-        """
-        Aggiunge peso a un vertice per uno step specifico.
-        
-        Args:
-            i_vertex_id (int): ID del vertice
-            d_distance (float): Distanza da aggiungere
-            i_step (int): Step dell'array
-            
-        Raises:
-            Exception: Se il vertice non esiste
-        """
-        if i_vertex_id not in self.m_dict_vertices:
-            raise Exception("Vertex is not exist.")
-        
-        self.m_dict_vertices[i_vertex_id].aWeightSum[i_step] += 1 - d_distance
+        return self.m_dict_vertices[v1].aWeightSum[step]
     
     def clear_vertex_weight(self, i_step):
-        """
-        Azzera i pesi di tutti i vertici per uno step specifico.
-        
-        Args:
-            i_step (int): Step dell'array da azzerare
-        """
         for vertex_value in self.m_dict_vertices.values():
             vertex_value.aWeightSum[i_step] = 0
     
-    def get_all_edges(self) -> Dict[str, EdgeInfo]:
-        """
-        Restituisce tutti gli archi del grafo.
-        
-        Returns:
-            dict: Dizionario di tutti gli archi
-        """
+    def get_all_edges(self) -> Dict[str, Edge]:
         return self.m_dict_edges
-    
-    def get_vertex_neighbours(self, i_vertex_id):
-        vertex_value = self.m_dict_vertices[i_vertex_id]
-        return vertex_value.pNeighbours
-    
-    def add_vertex(self, i_begin, i_end):
-        """
-        Aggiunge un vertice al grafo.
-        
-        Args:
-            i_begin (int): Vertice da aggiungere
-            i_end (int): Vertice vicino da collegare
-        """
-        if i_begin not in self.m_dict_vertices:
-            vl = VertexValue_v2()
-            self.m_dict_vertices[i_begin] = vl
-            vl.pNeighbours.append(i_begin)
-        
-        self.m_dict_vertices[i_begin].pNeighbours.append(i_end)
     
     def from_key_to_vertex(edge_key: str):
         vertices = edge_key.split()
@@ -209,7 +118,7 @@ class Graph:
         map_vertices = self.m_dict_vertices
         
         for vertex_id, vertex_value in map_vertices.items():
-            degree = len(vertex_value.pNeighbours) - 1
+            degree = len(vertex_value.neighbours) - 1
             vertices_degree[vertex_id] = degree
 
         # Debug output if enabled

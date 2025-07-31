@@ -37,6 +37,12 @@ def log(message: str):
 
 def main(args, spark, sc):
     MyUtil.delete_path(args.output_folder)
+    
+    # reduced_edges, ff  = CommunityDetection.execute(
+    #     args.graph_file, args.window_size, 0, None, 
+    # )
+    # communities = breadth_first_search(reduced_edges, ff)
+    # exit(0)
 
     # -- PHASE 1: graph loading and computing jaccard Distance --
     graph_initilizer = GraphUtils()
@@ -116,35 +122,22 @@ def main(args, spark, sc):
             # ----------------------- PHASE 3: Community Detection ---------------
             # --------------------------------------------------------------------
 
-            singleMachineOutput = CommunityDetection.execute(
-                reduced_edges, args.window_size, previousSlidingWindow, 
+            reduced_edges = CommunityDetection.execute(
+                reduced_edges, args.window_size, counter, previousSlidingWindow, 
             )
-
-            exit(0)
-
-            communities = breadth_first_search(singleMachineOutput, n_v)
+            
+            break
 
         rdd_graph_jaccard = df_reduced_edges.rdd
 
-        if flag == False:
+        if not flag:
             toc_main = time.time()
             print("Total time main:", round(toc_main - tic_main, 3), "s")
 
-        # flag = not (non_converged == 0)
-        # rdd_graph_jaccard = df_reduced_edges.rdd
-        # counter += 1
-        # print("Iteration number: ", counter)
-        # if flag == False:
-        #     toc_main = time.time()
-        #     print("Total time main:", round(toc_main - tic_main, 3), "s")
-
-        # print("START Community Detection")
-        # communities = breadth_first_search(reduced_edges, num_vertices)
-        rdd_graph_jaccard = df_reduced_edges.rdd
         counter += 1
 
     log(f"Main time: [bold orange3] {round(time.time() - tic_main, 2)} [/bold orange3]")
-
+    
     communities = breadth_first_search(reduced_edges, n_v)
 
     # Save communities to file
