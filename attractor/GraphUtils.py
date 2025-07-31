@@ -111,6 +111,8 @@ class GraphUtils:
         loaded_graph : Graph = self.setup_graph(graph_file)
         jaccard_initilized_graph = self.initialize_graph(loaded_graph)
         
+        print(max(jaccard_initilized_graph.m_dict_vertices.keys()))
+        
         return jaccard_initilized_graph
     
     def setup_graph_rdd(self, reduced_edges, loop_counter): #str_filename

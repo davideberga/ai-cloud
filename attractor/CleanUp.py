@@ -4,13 +4,9 @@ class CleanUp:
     
     @staticmethod
     def reduce_edges(
-    n_vertices,
     output_update_edges,
 ):
-        dirty = np.zeros((n_vertices))
         non_converged = 0
-        converged = 0
-        
         
         for row in output_update_edges:
             c, t = row[0].split("-")
@@ -21,36 +17,10 @@ class CleanUp:
             if dis < 1 and dis > 0:
                 u -= 1
                 v -= 1
-                dirty[u] = 1
-                dirty[v] = 1
                 non_converged += 1
-            else:
-                converged   += 1
-                
-        for row in output_update_edges:
-            c, t = row[0].split("-")
-            u = int(c)
-            v = int(t)
-            u -= 1
-            v -= 1
-            if dirty[u] == 1 or dirty[v] == 1:
-                dirty[u] = 2 if dirty[u] == 0 else dirty[u]
-                dirty[v] = 2 if dirty[v] == 0 else dirty[v]
-                
-        the_number_of_continued_to_used_edges = 0
-                
-        for row in output_update_edges:
-            c, t = row[0].split("-")
-            u = int(c)
-            v = int(t)
-            u -= 1
-            v -= 1
-            if dirty[u] == 1 or dirty[v] == 1 or dirty[u] == 2 or dirty[v] == 2:
-                the_number_of_continued_to_used_edges += 1
-            else:
-                pass
+
         
-        return converged, non_converged, the_number_of_continued_to_used_edges, output_update_edges
+        return non_converged
 
     def validate_final_edges(self, file1, no_original_edges):
         cnt = 0

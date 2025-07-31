@@ -14,7 +14,7 @@ class MyUtil:
 
 def connected_components(output_second_phase, num_vertices):
     visited = [False] * num_vertices
-    comms = [0] * num_vertices
+    comms = [0] * num_vertices 
     adj_list = [[] for _ in range(num_vertices)]
 
     # Build adjacency list, skipping edges with weight == 1

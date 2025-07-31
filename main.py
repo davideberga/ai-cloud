@@ -85,20 +85,12 @@ def main(args, spark, sc):
         # print(rdd_star_graph.take(10))
         # exit(0)
         
-        res_star = rdd_star_graph.collect()
-        
-        rdd_star_graph = sc.parallelize(res_star)
-
         # -- PHASE 2.2: Dynamic Interactions --
         rdd_dynamic_interactions = MRDynamicInteractions.mapReduce(
             rdd_star_graph,
             args.num_partitions,
             args.lambda_,
         )
-        
-        res_dyn = rdd_dynamic_interactions.collect()
-        
-        rdd_dynamic_interactions = sc.parallelize(res_dyn)
 
         # -- PHASE 2.3: Update Edges --
         rdd_updated_edges = MRUpdateEdges.mapReduce(
@@ -119,15 +111,13 @@ def main(args, spark, sc):
             new_data = (*data, tuple(partitions.get(center)), tuple(partitions.get(target))) 
             reassing_partitions.append((key, new_data))
         
-        converged, non_converged, continued, reduced_edges = CleanUp.reduce_edges(
-            n_v, updated_edges
-        )
+        non_converged = CleanUp.reduce_edges(updated_edges)
         rdd_graph_jaccard = sc.parallelize(reassing_partitions)
 
 
         it_time = round(time.time() - start_spark_execution, 2)
         log(
-            f"[bold orange3]It: {counter}, converged: {converged} / {n_e}, time {it_time} s [/bold orange3] "
+            f"[bold orange3]It: {counter}, converged: {n_e - non_converged} / {n_e}, time {it_time} s [/bold orange3] "
         )
 
         flag = not (non_converged == 0)
@@ -135,7 +125,7 @@ def main(args, spark, sc):
             flag = False
             
             updated_edges = CommunityDetection.execute(
-                reduced_edges, args.window_size, counter
+                updated_edges, args.window_size, counter
             )
             
             break
@@ -171,8 +161,8 @@ if __name__ == "__main__":
         conf.set("spark.sql.execution.arrow.pyspark.fallback.enabled", "true")
         
         # Memory and GC monitoring
-        conf.set("spark.executor.memory", "4g")
-        conf.set("spark.driver.memory", "2g")
+        conf.set("spark.executor.memory", "8g")
+        conf.set("spark.driver.memory", "8g")
         conf.set("spark.executor.memoryFraction", "0.8")
 
 
