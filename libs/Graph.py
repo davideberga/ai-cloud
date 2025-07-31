@@ -222,11 +222,13 @@ class Graph:
             degree_start = vertices_degree.get(vertex_start)
             degree_end = vertices_degree.get(vertex_end)
             
-            partitions = []
+            partitions_center = []
+            partitions_target = []
             if partitioned is not None:
-                partitions = tuple(partitioned.get(vertex_start))
+                partitions_center = tuple(partitioned.get(vertex_start))
+                partitions_target = tuple(partitioned.get(vertex_end))
             
-            edges_data.append((f"{vertex_start}-{vertex_end}", ["G", vertex_end, edge_value.weight, [], degree_start, degree_end, partitions]))
+            edges_data.append((f"{vertex_start}-{vertex_end}", ["G", vertex_end, edge_value.weight, [], degree_start, degree_end, partitions_center, partitions_target]))
         
         return spark.sparkContext.parallelize(edges_data)
     

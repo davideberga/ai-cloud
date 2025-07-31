@@ -171,7 +171,6 @@ class DynamicInteractions:
         duv: float,
         partition_name_splitted: List[int],
         lambda_: float,
-        triplets,
         sliding
     ):
         if duv < 0 or duv > 1:

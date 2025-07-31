@@ -86,7 +86,6 @@ class MRDynamicInteractions:
                                     weight=neighbor_distance,
                                     deg_center=deg_center,
                                     deg_neigh= neighbor_degree,
-                                    triplets=triplets,
                                     sliding=neighbor_edge_sliding
                                 )
                             )
@@ -133,7 +132,6 @@ class MRDynamicInteractions:
                     edge.weight,
                     partition_name_splitted,
                     lambda_,
-                    edge.triplets,
                     edge.sliding
                 )
                 key = f"{edge.center}-{edge.neighbor}"

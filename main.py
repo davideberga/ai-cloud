@@ -101,8 +101,9 @@ def main(args, spark, sc):
         
         reassing_partitions = []
         for (key, data) in updated_edges:
-            center = int(key.split("-")[0])
-            new_data = (*data, tuple(partitions.get(center))) 
+            center, target = key.split("-")
+            center, target = int(center), int(target)
+            new_data = (*data, tuple(partitions.get(center)), tuple(partitions.get(target))) 
             reassing_partitions.append((key, new_data))
         
         converged, non_converged, continued, reduced_edges = CleanUp.reduce_edges(
