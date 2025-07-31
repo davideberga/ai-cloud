@@ -86,7 +86,7 @@ def main(args, spark, sc):
         # exit(0)
         
         res_star = rdd_star_graph.collect()
-        print("Stra graph")
+        
         rdd_star_graph = sc.parallelize(res_star)
 
         # -- PHASE 2.2: Dynamic Interactions --
@@ -97,7 +97,7 @@ def main(args, spark, sc):
         )
         
         res_dyn = rdd_dynamic_interactions.collect()
-        print("Dyn int")
+        
         rdd_dynamic_interactions = sc.parallelize(res_dyn)
 
         # -- PHASE 2.3: Update Edges --

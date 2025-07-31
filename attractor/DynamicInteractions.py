@@ -97,18 +97,19 @@ class DynamicInteractions:
         common_main_node = 0
 
         while i < len_neigh_u and j < len_neigh_v:
-            first, second  = neighbors_u[i], neighbors_v[j]
+            first_id, first_weight, *_  = neighbors_u[i]
+            second_id, second_weight, *_ = neighbors_v[j]
 
-            if first.vertex_id < second.vertex_id:
+            if first_id < second_id:
                 i += 1
-            elif second.vertex_id < first.vertex_id:
+            elif second_id < first_id:
                 j += 1
             else:
-                sum_common_weight += (1 - first.weight) + (1 - second.weight)
+                sum_common_weight += (1 - first_weight) + (1 - second_weight)
                 i += 1
                 j += 1
 
-                p_u = DynamicInteractions.node2hash(first.vertex_id, n_partitions)
+                p_u = DynamicInteractions.node2hash(first_id, n_partitions)
                 if p_u in partition_name_splitted:
                     common_main_node += 1
 
@@ -191,8 +192,8 @@ class DynamicInteractions:
             first = neighbors_u[i]
             second = neighbors_v[j]
 
-            first_id = first.vertex_id
-            second_id = second.vertex_id
+            first_id, first_weight, *_ = first
+            second_id, second_weight, *_ = second
 
             p_first = DynamicInteractions.node2hash(
                 first_id, no_partitions=n_partitions
@@ -211,7 +212,7 @@ class DynamicInteractions:
                     first_id,
                     v,
                     u,
-                    first.weight,
+                    first_weight,
                     duv,
                     deg_u,
                     n_partitions,
@@ -226,7 +227,7 @@ class DynamicInteractions:
                     second_id,
                     u,
                     v,
-                    second.weight,
+                    second_weight,
                     duv,
                     deg_v,
                     n_partitions,
@@ -244,8 +245,8 @@ class DynamicInteractions:
                     deg_u,
                     deg_v,
                     duv,
-                    first.weight,
-                    second.weight,
+                    first_weight,
+                    second_weight,
                     n_partitions,
                 )
                 i += 1
@@ -253,13 +254,13 @@ class DynamicInteractions:
 
         # Process i remaining neighbors of u
         while i < len_neigh_u:
-            u_neighbour = neighbors_u[i]
-            
+            neigh_id, neigh_weight, *_ = neighbors_u[i]
+
             sum_ei += DynamicInteractions.compute_ei(
-                u_neighbour.vertex_id,
+                neigh_id,
                 v,
                 u,
-                u_neighbour.weight,
+                neigh_weight,
                 duv,
                 deg_u,
                 n_partitions,
@@ -272,12 +273,12 @@ class DynamicInteractions:
 
         # Process j remaining neighbors of v
         while j < len_neigh_v:
-            v_neighbour = neighbors_v[j]
+            neigh_id, neigh_weight, *_ = neighbors_v[j]
             sum_ei += DynamicInteractions.compute_ei(
-                v_neighbour.vertex_id,
+                neigh_id,
                 u,
                 v,
-                v_neighbour.weight,
+                neigh_weight,
                 duv,
                 deg_v,
                 n_partitions,

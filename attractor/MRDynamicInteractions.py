@@ -22,15 +22,10 @@ class MRDynamicInteractions:
 
     @staticmethod
     def map_function(star_graph):
-        star = star_graph
-
-        center = star.center
-        neighbors = star.neighbors
-        triplets = star.triplets
-        degree = star.degree
+        center, neighbors, triplets, degree = star_graph
 
         results = [
-            (triplet, Row(center=center, degree=degree, neighbors=neighbors, triplets=triplets))
+            (triplet, (center, degree, neighbors))
             for triplet in triplets
         ]
         return results
@@ -52,20 +47,14 @@ class MRDynamicInteractions:
 
         excluded = dict()
         for star_graph in star_graphs:
-            center = star_graph.center
-            deg_center = star_graph.degree
-            neighbors = star_graph.neighbors
-            triplets = star_graph.triplets
+            center, deg_center, neighbors = star_graph
 
             sum_degree += deg_center
             sumWeight = 0.0
             hash_center = DynamicInteractions.node2hash(center, n_partitions)
 
             for neigh_info in neighbors:
-                neighbor_id = neigh_info.vertex_id  # prima era v
-                neighbor_distance = neigh_info.weight
-                neighbor_degree = neigh_info.degree
-                neighbor_edge_sliding = neigh_info.sliding
+                neighbor_id, neighbor_distance, neighbor_degree, neighbor_edge_sliding = neigh_info
 
                 sumWeight += 1.0 - neighbor_distance
 
@@ -94,7 +83,7 @@ class MRDynamicInteractions:
                                 "I",
                                 neighbor_id,
                                 0,
-                                neigh_info.weight,
+                                neighbor_distance,
                                 deg_center,
                                 neighbor_degree,
                                 neighbor_edge_sliding

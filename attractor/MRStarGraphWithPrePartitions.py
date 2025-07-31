@@ -56,9 +56,7 @@ class MRStarGraphWithPrePartitions:
 
         # sort neighbors by vertex_id
         sorted_neighbors = sorted(neighbors, key=lambda x: x[0])
-        neighbors_row = [
-            Row(vertex_id=vid, weight=w, degree=deg, sliding=sliding) for vid, w, deg, sliding in sorted_neighbors
-        ]
+        neighbors_tuple = [(vid, w, deg, sliding) for vid, w, deg, sliding in sorted_neighbors]
         
         seen = set()
         result = []
@@ -73,7 +71,7 @@ class MRStarGraphWithPrePartitions:
         return [
             Row(
                 center=vertex_id,
-                neighbors=neighbors_row,
+                neighbors=neighbors_tuple,
                 triplets=tuple(result),
                 degree=degree,
             )
