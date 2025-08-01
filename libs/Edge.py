@@ -1,9 +1,8 @@
 from libs.Settings import Settings
 import numpy as np
+from bitarray import bitarray
 
 class Edge:
-    
-    
     
     def __init__(self,vertex_start, vertex_end, disuv):
 
@@ -27,24 +26,22 @@ class Edge:
     def add_new_delta_2_window(self, d_delta, window_size: int):
 
         if self.deltaWindow is None:
-            self.deltaWindow = np.zeros((32), dtype=bool)
+            self.deltaWindow = bitarray(window_size)
+            self.deltaWindow.setall(0)
         
         window_index = self.i_newest_delta_index % window_size
         
-        if d_delta < 0:
-            self.deltaWindow[window_index] = False
-        else:
-            self.deltaWindow[window_index] = True
+        self.deltaWindow[window_index] = int(d_delta >= 0)
         
         i_sum_same_sign = 0
         
         if self.i_newest_delta_index >= window_size - 1:
             if self.deltaWindow[window_index]:
-                sum_ = sum(self.deltaWindow)
+                sum_ = self.deltaWindow.count(1)
                 if sum_ > self.DEFAULT_SUPPORT_SLIDING_WINDOW * window_size:
                     d_delta = 2
             else:
-                i_sum_same_sign = window_size - sum(self.deltaWindow)
+                i_sum_same_sign = window_size - self.deltaWindow.count(0)
                 if i_sum_same_sign > self.DEFAULT_SUPPORT_SLIDING_WINDOW * window_size:
                     d_delta = -2
         self.i_newest_delta_index += 1
@@ -52,9 +49,11 @@ class Edge:
     
     def set_sliding_window(self, current_loop, status):
         if self.deltaWindow is None:
-            self.deltaWindow = self.deltaWindow = np.zeros((32), dtype=bool)
+            self.deltaWindow = bitarray(len(status))
+            self.deltaWindow.setall(0)
         
         for i in range(current_loop):
-            self.deltaWindow[i] = status[i]
+            #self.deltaWindow[i] = int(status[i])
+            self.deltaWindow = bitarray(status)
         
         self.i_newest_delta_index = current_loop

@@ -1,5 +1,6 @@
 from pyspark.sql.types import Row
 import numpy as np
+from bitarray import bitarray
 from .MRStarGraphWithPrePartitions import MRStarGraphWithPrePartitions
 
 
@@ -71,40 +72,45 @@ class MRUpdateEdges:
         
 
         if usingSlidingWindow and iterations_counter > 0:
-            deltaWindow = updates[4]        
+            deltaWindow = bitarray(updates[4]) # deserialize bitarray 
         else:
-            deltaWindow = np.zeros((window_size), dtype=bool)
+            deltaWindow = bitarray(abs(window_size))
+            deltaWindow.setall(0)
             
         if dis_uv < 0: return (), ()
 
         if dis_uv < 1 and dis_uv > 0  and usingSlidingWindow:
             delta_t, sliding_data = MRUpdateEdges.updateDeltaWindow(edge, delta_t, iterations_counter, window_size, deltaWindow, tau)
         else:
-            sliding_data = np.zeros(window_size, dtype=bool)
+            sliding_data = bitarray(abs(window_size))
+            sliding_data.setall(0)
         
         d_t_1 = dis_uv + delta_t
         if d_t_1 > 1:
             d_t_1 = 1.0
         if d_t_1 < 0:
             d_t_1 = 0.0
-            
-        return (edge_raw, ("G", edge.target, d_t_1, sliding_data, deg_center, deg_target))
+
+        # Convert bitarray to binary string for serialization
+        sliding_data_serialized = sliding_data.to01()
+
+        return (edge_raw, ("G", edge.target, d_t_1, sliding_data_serialized, deg_center, deg_target))
 
     @staticmethod
     def updateDeltaWindow(
         edge, delta, iterations_counter, window_size, deltaWindow, tau
     ):
         index = iterations_counter % window_size
-        deltaWindow[index] = bool(delta >= 0)
+        deltaWindow[index] = int(delta >= 0)
 
         returnedDelta = delta
         if iterations_counter >= (window_size - 1):
             if deltaWindow[index]:
-                sameSize = np.sum(deltaWindow)
+                sameSize = deltaWindow.count(1)
                 if sameSize > (tau * window_size):
                     returnedDelta = 2
             else:
-                sameSize = window_size - np.sum(deltaWindow)
+                sameSize = window_size - deltaWindow.count(0)
                 if sameSize > tau * window_size:
                     returnedDelta = -2
 
