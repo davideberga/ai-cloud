@@ -34,11 +34,13 @@ class MRUpdateEdges:
     @staticmethod
     def seq_op(acc, rdd_edge):
         current_weight, total_update, deg_center, deg_target, sliding = acc
-        current_weight = rdd_edge[2]
-        total_update += rdd_edge[1]
-        deg_center = rdd_edge[3]
-        deg_target = rdd_edge[4]
-        sliding = rdd_edge[5]
+        if len(rdd_edge) == 5:
+            total_update += rdd_edge[1]
+            current_weight = rdd_edge[2]
+            deg_center = rdd_edge[3] if rdd_edge[3] != 0 else deg_center
+            deg_target = rdd_edge[4] if rdd_edge[4] != 0 else deg_target
+        else:
+            sliding = rdd_edge
         return (current_weight, total_update, deg_center, deg_target, sliding)
 
     @staticmethod
@@ -70,9 +72,11 @@ class MRUpdateEdges:
         deg_center = updates[2]
         deg_target =  updates[3]
         
+        # print(union_data)
+        
 
         if usingSlidingWindow and iterations_counter > 0:
-            deltaWindow = bitarray(updates[4]) # deserialize bitarray 
+            deltaWindow = updates[4] 
         else:
             deltaWindow = bitarray(abs(window_size))
             deltaWindow.setall(0)
@@ -91,10 +95,8 @@ class MRUpdateEdges:
         if d_t_1 < 0:
             d_t_1 = 0.0
 
-        # Convert bitarray to binary string for serialization
-        sliding_data_serialized = sliding_data.to01()
 
-        return (edge_raw, (edge.target, d_t_1, sliding_data_serialized, deg_center, deg_target))
+        return (edge_raw, (edge.target, d_t_1, sliding_data, deg_center, deg_target))
 
     @staticmethod
     def updateDeltaWindow(

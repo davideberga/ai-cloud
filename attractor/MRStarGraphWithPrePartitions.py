@@ -56,23 +56,26 @@ class MRStarGraphWithPrePartitions:
 
         # sort neighbors by vertex_id
         sorted_neighbors = sorted(neighbors, key=lambda x: x[0])
-        neighbors_tuple = [(vid, w, deg, sliding) for vid, w, deg, sliding in sorted_neighbors]
+        final_neighbors = []
+        final_sliding = []
+        for n_id, w, deg, sliding in sorted_neighbors:
+            final_neighbors.append((n_id, w, deg))
+            final_sliding.append((f"{vertex_id}-{n_id}", sliding))
         
         seen = set()
-        result = []
+        partitions = []
         for s in triplets:
-            nums = sorted(s.split(), key=int)  # sort numerically
-            sorted_s = " ".join(nums)          # reconstruct string
-            key = frozenset(nums)              # order-independent representation
+            nums = sorted(s.split(), key=int)  
+            sorted_s = " ".join(nums)          
+            key = frozenset(nums)              
             if key not in seen:
                 seen.add(key)
-                result.append(sorted_s)        # append the sorted string
-
-        return [
-            Row(
-                center=vertex_id,
-                neighbors=neighbors_tuple,
-                triplets=tuple(result),
-                degree=degree,
-            )
-        ]
+                partitions.append(sorted_s) 
+                
+        res =  [
+            (triplet, (vertex_id, degree, final_neighbors))
+            for triplet in partitions
+        ]      
+        
+        res.extend(final_sliding)
+        return res 

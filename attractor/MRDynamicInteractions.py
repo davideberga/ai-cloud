@@ -8,9 +8,7 @@ class MRDynamicInteractions:
     def mapReduce(
         rdd_star_graph, n_partition: int, _lambda_: float,
     ):
-        intermediate_rdd = rdd_star_graph.flatMap(MRDynamicInteractions.map_function)
-
-        grouped_by_subgraph = intermediate_rdd.groupByKey()
+        grouped_by_subgraph = rdd_star_graph.groupByKey()
 
         computed_dyni = grouped_by_subgraph.flatMap(
             lambda part: MRDynamicInteractions.reduce_function(
@@ -21,19 +19,17 @@ class MRDynamicInteractions:
         return computed_dyni
 
     @staticmethod
-    def map_function(star_graph):
-        center, neighbors, triplets, degree = star_graph
-
-        results = [
-            (triplet, (center, degree, neighbors))
-            for triplet in triplets
-        ]
-        return results
-
-    @staticmethod
     def reduce_function(
         partition: Tuple[str, List], n_partitions, lambda_
+        
+        
     ):
+        partition_name, star_graphs = partition
+        
+        # This is slinding data, simply rebroadcast
+        if "-" in partition_name:
+            return [(partition_name, list(partition[1])[0])]
+        
         result = []
         listEdges = []
         sum_degree = 0
@@ -42,7 +38,7 @@ class MRDynamicInteractions:
         dictSumWeight = dict()
         adjListDictMain = dict()
         adjListDictForExclusive = dict()
-        partition_name, star_graphs = partition
+        
         partition_name_splitted = list(map(int, partition_name.split(" ")))
 
         excluded = dict()
@@ -54,7 +50,7 @@ class MRDynamicInteractions:
             hash_center = DynamicInteractions.node2hash(center, n_partitions)
 
             for neigh_info in neighbors:
-                neighbor_id, neighbor_distance, neighbor_degree, neighbor_edge_sliding = neigh_info
+                neighbor_id, neighbor_distance, neighbor_degree = neigh_info
 
                 sumWeight += 1.0 - neighbor_distance
 
@@ -75,7 +71,6 @@ class MRDynamicInteractions:
                                     weight=neighbor_distance,
                                     deg_center=deg_center,
                                     deg_neigh= neighbor_degree,
-                                    sliding=neighbor_edge_sliding
                                 )
                             )
                         else:
@@ -85,7 +80,6 @@ class MRDynamicInteractions:
                                 neighbor_distance,
                                 deg_center,
                                 neighbor_degree,
-                                neighbor_edge_sliding
                             )
                         main_edges += 1
 
@@ -120,7 +114,6 @@ class MRDynamicInteractions:
                     edge.weight,
                     partition_name_splitted,
                     lambda_,
-                    edge.sliding
                 )
                 key = f"{edge.center}-{edge.neighbor}"
                 if key in excluded.keys():
@@ -128,6 +121,7 @@ class MRDynamicInteractions:
                 result.append(attr)
 
         for key, v in excluded.items():
+            print(key)
             result.append((key, v))
 
         return result

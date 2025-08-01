@@ -69,6 +69,7 @@ def main(args, spark, sc):
     
     rdd_graph_jaccard = graph_with_jaccard.get_graph_jaccard_dataframe(spark, partitions)
     
+    degree_dict = graph_with_jaccard.get_degree_dict()
     del graph_with_jaccard
     gc.collect()
     
@@ -78,6 +79,7 @@ def main(args, spark, sc):
     tic_main = time.time()
     counter = 0
     while flag:
+        
         # print(rdd_graph_jaccard.filter(lambda r: r[0] == '3-2').collect())
         # -- PHASE 2.1: Star Graph --
         rdd_star_graph = MRStarGraphWithPrePartitions.mapReduce(rdd_graph_jaccard)
@@ -91,6 +93,8 @@ def main(args, spark, sc):
             args.num_partitions,
             args.lambda_,
         )
+        
+
 
         # -- PHASE 2.3: Update Edges --
         rdd_updated_edges = MRUpdateEdges.mapReduce(
@@ -104,14 +108,20 @@ def main(args, spark, sc):
         start_spark_execution = time.time()
         updated_edges = rdd_updated_edges.collect()
         
+        
+        
         reassing_partitions = []
         for (key, data) in updated_edges:
             center, target = key.split("-")
             center, target = int(center), int(target)
-            new_data = (*data, tuple(partitions.get(center)), tuple(partitions.get(target))) 
+            v, t, sliding, _, _ = data
+            degree_center = degree_dict.get(center)
+            degree_target = degree_dict.get(target)
+            new_data = (v, t, sliding, degree_center, degree_target, tuple(partitions.get(center)), tuple(partitions.get(target))) 
             reassing_partitions.append((key, new_data))
         
         non_converged = CleanUp.reduce_edges(updated_edges)
+       
         rdd_graph_jaccard = sc.parallelize(reassing_partitions)
 
 
@@ -119,7 +129,7 @@ def main(args, spark, sc):
         log(
             f"[bold orange3]It: {counter}, converged: {n_e - non_converged} / {n_e}, time {it_time} s [/bold orange3] "
         )
-
+    
         flag = not (non_converged == 0)
         if non_converged < args.gamma:
             flag = False

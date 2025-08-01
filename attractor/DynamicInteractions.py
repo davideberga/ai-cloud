@@ -151,6 +151,7 @@ class DynamicInteractions:
         
         assert n_partitions >= 3
         assert 0 < distance_u_v < 1
+        
 
         di = -math.sin(1 - distance_u_v) / deg_u - math.sin(1 - distance_u_v) / deg_v
         p_u = DynamicInteractions.node2hash(u, n_partitions)
@@ -172,7 +173,6 @@ class DynamicInteractions:
         duv: float,
         partition_name_splitted: List[int],
         lambda_: float,
-        sliding
     ):
         if duv < 0 or duv > 1:
             return
@@ -291,4 +291,4 @@ class DynamicInteractions:
             
         delta =  di + sum_ci + sum_ei
 
-        return (f"{u}-{v}", (v, delta, duv, deg_u, deg_v, sliding))
+        return (f"{u}-{v}", (v, delta, duv, deg_u, deg_v))
