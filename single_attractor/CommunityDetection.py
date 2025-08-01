@@ -184,7 +184,7 @@ class CommunityDetection:
                 res.append(
                     (
                         Graph.refine_edge_key(vertex_start, vertex_end),
-                        ("G", vertex_end, edge.a_distance[current_step], [], -1, -1),
+                        (vertex_end, edge.a_distance[current_step], [], -1, -1),
                     )
                 ),
             )

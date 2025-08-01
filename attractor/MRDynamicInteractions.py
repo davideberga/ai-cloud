@@ -80,7 +80,6 @@ class MRDynamicInteractions:
                             )
                         else:
                             excluded[f"{center}-{neighbor_id}"] = (
-                                "I",
                                 neighbor_id,
                                 0,
                                 neighbor_distance,

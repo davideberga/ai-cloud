@@ -18,7 +18,7 @@ def connected_components(output_second_phase, num_vertices):
     adj_list = [[] for _ in range(num_vertices)]
 
     # Build adjacency list, skipping edges with weight == 1
-    for edge, (t, v, weight, sliding, deg_u, deg_v) in output_second_phase:
+    for edge, (v, weight, sliding, deg_u, deg_v) in output_second_phase:
         if int(weight) == 1:
             continue
         

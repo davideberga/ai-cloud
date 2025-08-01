@@ -31,10 +31,10 @@ class MRStarGraphWithPrePartitions:
     @staticmethod
     def both_directions(row):
         center = int(row[0].split("-")[0])
-        type_, target, weight, sliding, degree_center, degree_target, partitions_center, partitions_neighbour = row[1]
+        target, weight, sliding, degree_center, degree_target, partitions_center, partitions_neighbour = row[1]
         return [
-            (center, (type_, target, weight, sliding, degree_center, degree_target, partitions_center)),
-            (target, (type_, center, weight, sliding, degree_target, degree_center, partitions_neighbour)),
+            (center, (target, weight, sliding, degree_center, degree_target, partitions_center)),
+            (target, (center, weight, sliding, degree_target, degree_center, partitions_neighbour)),
         ]
 
     # input: vertex_id is the id of the certal node of the star graph
@@ -46,7 +46,7 @@ class MRStarGraphWithPrePartitions:
         neighbors = []
         triplets = []
         for entry in entries:
-            type_, target, weight, sliding, degree, degree_neigh, partitions = entry
+            target, weight, sliding, degree, degree_neigh, partitions = entry
             triplets.extend(partitions)
             neighbors.append((target, weight, degree_neigh, sliding))
                 

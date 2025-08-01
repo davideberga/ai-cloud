@@ -121,9 +121,9 @@ class GraphUtils:
         for row in reduced_edges:
             start, end = row[0].split('-')
             start, end = int(start), int(end)
-            w = row[1][2]
+            w = row[1][1]
             graph.add_edge(start, end, w)
-            graph.m_dict_edges[row[0]].set_sliding_window(loop_counter, row[1][3])
+            graph.m_dict_edges[row[0]].set_sliding_window(loop_counter, row[1][2])
 
         return graph
     

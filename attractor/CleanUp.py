@@ -12,7 +12,7 @@ class CleanUp:
             c, t = row[0].split("-")
             u = int(c)
             v = int(t)
-            dis = row[1][2]
+            dis = row[1][1]
         
             if dis < 1 and dis > 0:
                 u -= 1

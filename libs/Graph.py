@@ -107,7 +107,7 @@ class Graph:
                 partitions_center = tuple(partitioned.get(vertex_start))
                 partitions_target = tuple(partitioned.get(vertex_end))
             
-            edges_data.append((f"{vertex_start}-{vertex_end}", ["G", vertex_end, edge_value.weight, [], degree_start, degree_end, partitions_center, partitions_target]))
+            edges_data.append((f"{vertex_start}-{vertex_end}", [vertex_end, edge_value.weight, [], degree_start, degree_end, partitions_center, partitions_target]))
         
         return spark.sparkContext.parallelize(edges_data)
     

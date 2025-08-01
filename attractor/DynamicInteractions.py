@@ -291,4 +291,4 @@ class DynamicInteractions:
             
         delta =  di + sum_ci + sum_ei
 
-        return (f"{u}-{v}", ( 'I', v, delta, duv, deg_u, deg_v, sliding))
+        return (f"{u}-{v}", (v, delta, duv, deg_u, deg_v, sliding))

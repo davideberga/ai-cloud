@@ -56,7 +56,7 @@ def main(args, spark, sc):
     rdd_graph_jaccard = graph_with_jaccard.get_graph_jaccard_dataframe(spark)
     log(f"Jaccard distance init in {round(time.time() - start_jaccard, 2)} s")
 
-    
+    rdd_graph_jaccard.collect()    
 
     # -- Compute Partitions --
     start_partition = time.time()
@@ -64,7 +64,7 @@ def main(args, spark, sc):
         rdd_graph_jaccard, args.num_partitions
     )
     
-    rdd_graph_jaccard.collect()
+    
     partitions = df_partitioned.collectAsMap()
     
     rdd_graph_jaccard = graph_with_jaccard.get_graph_jaccard_dataframe(spark, partitions)
