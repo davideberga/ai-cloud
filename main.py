@@ -125,7 +125,7 @@ def main(args, spark, sc):
             flag = False
             
             updated_edges = CommunityDetection.execute(
-                updated_edges, args.window_size, counter
+                updated_edges, args.window_size, args.lambda_,  counter
             )
             
             break

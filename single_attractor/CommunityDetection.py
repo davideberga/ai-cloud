@@ -8,6 +8,10 @@ from pyspark.sql.types import Row
 
 
 class CommunityDetection:
+    
+    LAMBDA = 0.5
+    
+    
     @staticmethod
     def compute_next_step(index):
         return 1 if index == 0 else 0
@@ -72,11 +76,10 @@ class CommunityDetection:
     def compute_influence(
         graph: Graph, v1: int, v2: int, step: int, temp_result: dict
     ) -> float:
-        lambda_ = 0.5
         distance = 1 - CommunityDetection.compute_virtual_distance(
             graph, v1, v2, step, temp_result
         )
-        return distance if distance >= lambda_ else distance - lambda_
+        return distance if distance >= CommunityDetection.LAMBDA else distance - CommunityDetection.LAMBDA
 
     @staticmethod
     def compute_virtual_distance(
@@ -192,9 +195,10 @@ class CommunityDetection:
         return res
 
     @staticmethod
-    def execute(reduced_edges, window_size, current_loop):
+    def execute(reduced_edges, window_size, lambda_, current_loop):
         graph_utils = GraphUtils()
         initialized_graph = graph_utils.init_jaccard_from_rdd(
             reduced_edges, current_loop
         )
+        CommunityDetection.LAMBDA = lambda_
         return CommunityDetection.dynamic_interaction(initialized_graph, window_size)
