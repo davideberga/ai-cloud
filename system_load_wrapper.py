@@ -21,6 +21,8 @@ def monitor_process_tree(pid):
         total_mem = sum(p.memory_info().rss for p in procs if p.is_running())
         total_cpu = sum(p.cpu_percent(interval=0.1) for p in procs if p.is_running())
         
+        print(procs)
+        
         total_cpu /= psutil.cpu_count()
         return total_mem, total_cpu
     except psutil.NoSuchProcess:
