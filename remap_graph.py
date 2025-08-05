@@ -36,4 +36,9 @@ def remap_graph_id(file_path):
         f.write("# FromNodeId\tToNodeId\n")
         f.writelines(remapped_edges)
 
-#remap_graph_id('testgraphs/karate.txt')
+if __name__ == "__main__":
+    import sys
+    if len(sys.argv) != 2:
+        print("Use: python remap_graph.py <file_path>")
+    else:
+        remap_graph_id(sys.argv[1])

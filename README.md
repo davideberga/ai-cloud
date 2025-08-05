@@ -129,7 +129,8 @@ python main.py \
 --window-size 20 \
 --tau 0.7 \
 --gamma 5000 \
---num-partitions 5
+--num-partitions 5 \
+--single-machine False
 
 ```  
 testgraphs/sample2.txt MrAttractor -1 0.5 -1 0 100 -1 3710 -20 0.7 5000 15000000 16453 5 5 0
@@ -142,4 +143,5 @@ python main.py \
 --window-size -20 \
 --tau 0.7 \
 --gamma 5000 \
---num-partitions 5
+--num-partitions 5 \
+--single-machine False

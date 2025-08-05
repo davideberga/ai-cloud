@@ -1,4 +1,3 @@
-import os
 import time
 import signal, sys
 from args_parser import parse_arguments
@@ -16,9 +15,6 @@ from attractor.MRUpdateEdges import MRUpdateEdges
 from libs.Graph import Graph
 from attractor.CommunityDetection import CommunityDetection
 from pyspark import SparkConf
-from attractor.RDD_to_DataFrame import (
-    get_reduced_edges_dataframe,
-)
 from attractor.MRDynamicInteractions import (
     MRDynamicInteractions,
 )
@@ -31,20 +27,12 @@ warnings.filterwarnings("ignore")
 DEBUG = False
 REDUCED_EDGE = True
 
-
 def log(message: str):
     print(f"[MRAttractor] {message}")
-
 
 def main(args, spark, sc):
     MyUtil.delete_path(args.output_folder)
     
-    # reduced_edges, ff  = CommunityDetection.execute(
-    #     args.graph_file, args.window_size, 0, None, 
-    # )
-    # communities = breadth_first_search(reduced_edges, ff)
-    # exit(0)
-
     # -- PHASE 1: graph loading and computing jaccard Distance --
     graph_initilizer = GraphUtils()
 
@@ -64,7 +52,6 @@ def main(args, spark, sc):
         rdd_graph_jaccard, args.num_partitions
     )
     
-    
     partitions = df_partitioned.collectAsMap()
     
     rdd_graph_jaccard = graph_with_jaccard.get_graph_jaccard_dataframe(spark, partitions)
@@ -78,12 +65,8 @@ def main(args, spark, sc):
     tic_main = time.time()
     counter = 0
     while flag:
-        # print(rdd_graph_jaccard.filter(lambda r: r[0] == '3-2').collect())
         # -- PHASE 2.1: Star Graph --
         rdd_star_graph = MRStarGraphWithPrePartitions.mapReduce(rdd_graph_jaccard)
-        
-        # print(rdd_star_graph.take(10))
-        # exit(0)
         
         # -- PHASE 2.2: Dynamic Interactions --
         rdd_dynamic_interactions = MRDynamicInteractions.mapReduce(
@@ -113,7 +96,6 @@ def main(args, spark, sc):
         
         non_converged = CleanUp.reduce_edges(updated_edges)
         rdd_graph_jaccard = sc.parallelize(reassing_partitions)
-
 
         it_time = round(time.time() - start_spark_execution, 2)
         log(

@@ -49,6 +49,14 @@ def parse_arguments():
         help="Partitions for dynamic interaction phase",
     )
 
+    parser.add_argument(
+        "-sm",
+        "--single-machine",
+        type=bool,
+        required=False,
+        help="Run all in single-machine mode",
+    )
+
     return parser.parse_args()
 
 
@@ -80,6 +88,10 @@ def parse_arguments_monitor():
     )
     parser.add_argument(
         "-p", type=int, required=True, help="Partitions for dynamic interaction phase"
+    )
+
+    parser.add_argument(
+        "-sm", type=bool, required=False, help="Run all in single-machine mode"
     )
 
     return parser.parse_args()
