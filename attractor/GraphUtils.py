@@ -1,7 +1,5 @@
 import time
 from libs.Graph import Graph
-from libs.Settings import Settings
-
 
 class GraphUtils:
     """

@@ -1,4 +1,3 @@
-from libs.Settings import Settings
 import numpy as np
 from bitarray import bitarray
 

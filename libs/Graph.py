@@ -2,11 +2,9 @@ from typing import Dict, Tuple
 from attractor.DataframeSchemaProvider import DataframeSchemaProvider
 from libs.Vertex import Vertex
 from libs.Edge import Edge
-from libs.Settings import EdgeTypeEnum
 from pyspark.sql.dataframe import DataFrame
 from pyspark.sql import Row
 from pyspark.sql import SparkSession
-from libs.Settings import Settings
 
 class Graph:
     def __init__(self):
@@ -119,11 +117,10 @@ class Graph:
             degree = len(vertex_value.neighbours) - 1
             vertices_degree[vertex_id] = degree
 
-        # Debug output if enabled
-        if Settings.DEBUG:
-            with open("graph_degrees", 'w') as degree_init_out:
-                for vertex_id, degree_value in vertices_degree.items():
-                    degree_init_out.write(f"{vertex_id} {degree_value}\n")
+        # Save file with vertex degrees
+        # with open("graph_degrees", 'w') as degree_init_out:
+        #     for vertex_id, degree_value in vertices_degree.items():
+        #         degree_init_out.write(f"{vertex_id} {degree_value}\n")
         return  vertices_degree
 
     @staticmethod

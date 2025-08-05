@@ -14,7 +14,7 @@ from attractor.MRStarGraphWithPrePartitions import (
 from attractor.MRPreComputePartition import MRPreComputePartition
 from attractor.MRUpdateEdges import MRUpdateEdges
 from libs.Graph import Graph
-from single_attractor.CommunityDetection import CommunityDetection
+from attractor.CommunityDetection import CommunityDetection
 from pyspark import SparkConf
 from attractor.RDD_to_DataFrame import (
     get_reduced_edges_dataframe,

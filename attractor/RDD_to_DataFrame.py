@@ -1,7 +1,6 @@
 from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql import Row
 from attractor.DataframeSchemaProvider import DataframeSchemaProvider, MRDataFrameColumns
-from libs.Settings import EdgeTypeEnum
 
 def get_partitioned_dataframe(spark: SparkSession, reduce_output_rdd) -> DataFrame:
         # Row is the object type for DataFrame rows
