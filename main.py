@@ -20,8 +20,9 @@ from attractor.MRDynamicInteractions import (
 import warnings
 from attractor.NoConverged import NoConverged
 from rich import print
-from libs.Delete import delete_path
+from libs.NewOutputFolder import delete_path
 from typing import List, Tuple
+from libs.Details import Details
 
 warnings.filterwarnings("ignore")
 
@@ -33,6 +34,7 @@ def log(message: str):
 
 def main(args, spark, sc):
     delete_path(args.output_folder)
+    details = Details(args.output_folder)
     
     # -- PHASE 1: graph loading and computing jaccard Distance --
     graph_initilizer = GraphUtils()
@@ -46,6 +48,7 @@ def main(args, spark, sc):
     log(f"[green]Loaded {args.graph_file}, |V|: {n_v}, |E|: {n_e} [/green]")
     rdd_graph_jaccard = graph_with_jaccard.get_graph_jaccard_rdd(spark, args.window_size)
     log(f"Jaccard distance init in {round(time.time() - start_jaccard, 2)} s")
+    details.jaccard_timestamp = Details.current_timestamp()
 
     rdd_graph_jaccard.collect()  
 
@@ -69,10 +72,12 @@ def main(args, spark, sc):
         gc.collect()
         
         log(f"Partitions computed in {round(time.time() - start_partition, 3)} s")
+        details.partitions_timestamp = Details.current_timestamp()
 
         while flag:
             # -- PHASE 2.1: Star Graph --
             rdd_star_graph = MRStarGraphWithPrePartitions.mapReduce(rdd_graph_jaccard)
+            details.star_graph_timestamp.append(Details.current_timestamp())
             
             # -- PHASE 2.2: Dynamic Interactions --
             rdd_dynamic_interactions = MRDynamicInteractions.mapReduce(
@@ -80,6 +85,7 @@ def main(args, spark, sc):
                 args.num_partitions,
                 args.lambda_,
             )
+            details.dynamic_interactions_timestamp.append(Details.current_timestamp())
 
             # -- PHASE 2.3: Update Edges --
             rdd_updated_edges = MRUpdateEdges.mapReduce(
@@ -88,6 +94,7 @@ def main(args, spark, sc):
                 args.window_size,
                 counter,
             )
+            details.update_edges_timestamp.append(Details.current_timestamp())
 
             # Actual execution of the 3 phases of MapReduce
             start_spark_execution = time.time()
@@ -118,19 +125,19 @@ def main(args, spark, sc):
     if args.single_machine:
         graph_jaccard: List[Tuple[str, Tuple[int, float, List[float], int, int]]] = rdd_graph_jaccard.collect()
         updated_edges = CommunityDetection.execute(
-            graph_jaccard, args.window_size, args.lambda_, counter
+            graph_jaccard, args.window_size, args.lambda_, counter, details
         )
     elif non_converged < args.gamma:
         updated_edges = CommunityDetection.execute(
-            updated_edges, args.window_size, args.lambda_, counter
+            updated_edges, args.window_size, args.lambda_, counter, details
         )
 
     log(f"Main time: [bold orange3] {round(time.time() - tic_main, 2)} [/bold orange3]")
-    communities = NoConverged.connected_components(updated_edges, n_v)
+    communities = NoConverged.connected_components(updated_edges, n_v, details)
 
     # Save communities to file
-    NoConverged.save_communities(communities, args.output_folder, n_v)
-
+    #NoConverged.save_communities(communities, args.output_folder, n_v)
+    details.save()
 
 if __name__ == "__main__":
     args = parse_arguments()

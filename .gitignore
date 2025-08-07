@@ -16,6 +16,7 @@ temp_binary_file/
 artifacts/
 .venv/
 testgraphs/
+libs/read_npArray.py
 
 
 graph_jaccard_initilized

@@ -6,3 +6,5 @@ def delete_path(path: str):
         shutil.rmtree(path)
     elif os.path.isfile(path):
         os.remove(path)
+        
+    os.makedirs(path, exist_ok=True)

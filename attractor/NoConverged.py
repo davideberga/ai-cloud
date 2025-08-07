@@ -2,10 +2,11 @@ from pyspark.sql import SparkSession
 import os
 import shutil
 from collections import deque
+from libs.Details import Details
 
 class NoConverged:
 
-    def connected_components(output_second_phase, num_vertices):
+    def connected_components(output_second_phase, num_vertices, details: Details):
         visited = [False] * num_vertices
         comms = [0] * num_vertices 
         adj_list = [[] for _ in range(num_vertices)]
@@ -39,15 +40,20 @@ class NoConverged:
                             queue.append(adj)
 
         print(f"Number of communities: {ID}")
+        details.n_community = ID
+
+        for i in range(num_vertices):
+                details.communities[i+1] = comms[i]
+
         return comms
 
-    def save_communities(communities, output_folder, num_vertices):
-        if not os.path.exists(output_folder):
-            os.makedirs(output_folder)
+    # def save_communities(communities, output_folder, num_vertices):
+    #     if not os.path.exists(output_folder):
+    #         os.makedirs(output_folder)
 
-        with open(f"{output_folder}/communities.txt", "w") as f:
-            for i in range(num_vertices):
-                f.write(f"{i + 1} {communities[i]}\n")
+    #     with open(f"{output_folder}/communities.txt", "w") as f:
+    #         for i in range(num_vertices):
+    #             f.write(f"{i + 1} {communities[i]}\n")
 
     @staticmethod
     def reduce_edges(output_update_edges,):

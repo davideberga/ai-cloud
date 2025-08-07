@@ -7,6 +7,7 @@ from attractor.GraphUtils import GraphUtils
 from pyspark.sql.types import Row
 from rich import print
 from datetime import datetime
+from libs.Details import Details
 
 def log(message: str):
         timestamp = datetime.now().strftime("%H:%M:%S")
@@ -116,7 +117,7 @@ class CommunityDetection:
         return distance
 
     @staticmethod
-    def dynamic_interaction(graph: Graph, win_size: int):
+    def dynamic_interaction(graph: Graph, win_size: int, details: Details):
         PRECISE = 0.0000001
 
         loop_counter = 0
@@ -178,6 +179,8 @@ class CommunityDetection:
                     edges_converged_number += 1
 
             log(f"[bold orange3]It_sm: {loop_counter} [/bold orange3]")
+            details.sm_timestamp.append(Details.current_timestamp())
+
 
             loop_counter += 1
 
@@ -203,11 +206,11 @@ class CommunityDetection:
         return res
 
     @staticmethod
-    def execute(reduced_edges, window_size, lambda_, current_loop):
+    def execute(reduced_edges, window_size, lambda_, current_loop, details):
         graph_utils = GraphUtils()
         #print(reduced_edges)
         initialized_graph = graph_utils.init_jaccard_from_rdd(
             reduced_edges, current_loop
         )
         CommunityDetection.LAMBDA = lambda_
-        return CommunityDetection.dynamic_interaction(initialized_graph, window_size)
+        return CommunityDetection.dynamic_interaction(initialized_graph, window_size, details)
