@@ -54,6 +54,7 @@ def parse_arguments():
         "--single-machine",
         type=bool,
         required=False,
+        default=False,
         help="Run all in single-machine mode",
     )
 
@@ -91,7 +92,7 @@ def parse_arguments_monitor():
     )
 
     parser.add_argument(
-        "-sm", type=bool, required=False, help="Run all in single-machine mode"
+        "-sm", type=bool, required=False, default=False, help="Run all in single-machine mode"
     )
 
     return parser.parse_args()

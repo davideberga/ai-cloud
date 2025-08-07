@@ -29,7 +29,6 @@ class Edge:
             self.deltaWindow.setall(0)
         
         window_index = self.i_newest_delta_index % window_size
-        
         self.deltaWindow[window_index] = int(d_delta >= 0)
         
         i_sum_same_sign = 0

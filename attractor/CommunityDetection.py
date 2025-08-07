@@ -5,13 +5,17 @@ from libs.Edge import Edge
 from libs.Graph import Graph
 from attractor.GraphUtils import GraphUtils
 from pyspark.sql.types import Row
+from rich import print
+from datetime import datetime
 
+def log(message: str):
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        print(f"[MRAttractor_sm] {message}, {timestamp}")
 
 class CommunityDetection:
     
     LAMBDA = 0.5
-    
-    
+
     @staticmethod
     def compute_next_step(index):
         return 1 if index == 0 else 0
@@ -120,7 +124,7 @@ class CommunityDetection:
         dictVirtEdges = dict()
 
         b_continue = True
-
+        
         while b_continue:
             b_continue = False
 
@@ -173,11 +177,15 @@ class CommunityDetection:
                     graph.add_vertex_weight(v_end, new_distance, next_step)
                     edges_converged_number += 1
 
+            log(f"[bold orange3]It_sm: {loop_counter} [/bold orange3]")
+
             loop_counter += 1
 
             graph.clear_vertex_weight(current_step)
             dictVirtEdges = dict()
             current_step = CommunityDetection.compute_next_step(current_step)
+
+            
 
         p_edges = graph.get_all_edges()
         res = []
@@ -197,6 +205,7 @@ class CommunityDetection:
     @staticmethod
     def execute(reduced_edges, window_size, lambda_, current_loop):
         graph_utils = GraphUtils()
+        #print(reduced_edges)
         initialized_graph = graph_utils.init_jaccard_from_rdd(
             reduced_edges, current_loop
         )

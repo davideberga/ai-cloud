@@ -5,8 +5,7 @@ from attractor import GraphUtils
 import gc
 from attractor.GraphUtils import GraphUtils
 from pyspark.sql import SparkSession
-from attractor.MyUtil import MyUtil
-from attractor.CleanUp import CleanUp
+from attractor.NoConverged import NoConverged
 from attractor.MRStarGraphWithPrePartitions import (
     MRStarGraphWithPrePartitions,
 )
@@ -19,8 +18,10 @@ from attractor.MRDynamicInteractions import (
     MRDynamicInteractions,
 )
 import warnings
-from attractor.MyUtil import connected_components, save_communities
+from attractor.NoConverged import NoConverged
 from rich import print
+from libs.Delete import delete_path
+from typing import List, Tuple
 
 warnings.filterwarnings("ignore")
 
@@ -31,98 +32,104 @@ def log(message: str):
     print(f"[MRAttractor] {message}")
 
 def main(args, spark, sc):
-    MyUtil.delete_path(args.output_folder)
+    delete_path(args.output_folder)
     
     # -- PHASE 1: graph loading and computing jaccard Distance --
     graph_initilizer = GraphUtils()
+
+    print(f"single_machine: {args.single_machine}")
 
     start_jaccard = time.time()
     graph_with_jaccard: Graph = graph_initilizer.init_jaccard(args.graph_file)
     n_v, n_e = graph_with_jaccard.get_num_vertex(), graph_with_jaccard.get_num_edges()
 
     log(f"[green]Loaded {args.graph_file}, |V|: {n_v}, |E|: {n_e} [/green]")
-    rdd_graph_jaccard = graph_with_jaccard.get_graph_jaccard_dataframe(spark)
+    rdd_graph_jaccard = graph_with_jaccard.get_graph_jaccard_rdd(spark, args.window_size)
     log(f"Jaccard distance init in {round(time.time() - start_jaccard, 2)} s")
 
-    rdd_graph_jaccard.collect()    
-
-    # -- Compute Partitions --
-    start_partition = time.time()
-    df_partitioned = MRPreComputePartition.mapReduce(
-        rdd_graph_jaccard, args.num_partitions
-    )
-    
-    partitions = df_partitioned.collectAsMap()
-    
-    rdd_graph_jaccard = graph_with_jaccard.get_graph_jaccard_dataframe(spark, partitions)
-    
-    del graph_with_jaccard
-    gc.collect()
-    
-    log(f"Partitions computed in {round(time.time() - start_partition, 3)} s")
+    rdd_graph_jaccard.collect()  
 
     flag = True
     tic_main = time.time()
     counter = 0
-    while flag:
-        # -- PHASE 2.1: Star Graph --
-        rdd_star_graph = MRStarGraphWithPrePartitions.mapReduce(rdd_graph_jaccard)
-        
-        # -- PHASE 2.2: Dynamic Interactions --
-        rdd_dynamic_interactions = MRDynamicInteractions.mapReduce(
-            rdd_star_graph,
-            args.num_partitions,
-            args.lambda_,
+    
+    if args.single_machine == False:  
+
+        # -- Compute Partitions --
+        start_partition = time.time()
+        df_partitioned = MRPreComputePartition.mapReduce(
+            rdd_graph_jaccard, args.num_partitions
         )
-
-        # -- PHASE 2.3: Update Edges --
-        rdd_updated_edges = MRUpdateEdges.mapReduce(
-            rdd_dynamic_interactions,
-            args.tau,
-            args.window_size,
-            counter,
-        )
-
-        # Actual execution of the 3 phases of MapReduce
-        start_spark_execution = time.time()
-        updated_edges = rdd_updated_edges.collect()
         
-        reassing_partitions = []
-        for (key, data) in updated_edges:
-            center, target = key.split("-")
-            center, target = int(center), int(target)
-            new_data = (*data, tuple(partitions.get(center)), tuple(partitions.get(target))) 
-            reassing_partitions.append((key, new_data))
+        partitions = df_partitioned.collectAsMap()
         
-        non_converged = CleanUp.reduce_edges(updated_edges)
-        rdd_graph_jaccard = sc.parallelize(reassing_partitions)
+        rdd_graph_jaccard = graph_with_jaccard.get_graph_jaccard_rdd(spark, args.window_size, partitions)
+        
+        del graph_with_jaccard
+        gc.collect()
+        
+        log(f"Partitions computed in {round(time.time() - start_partition, 3)} s")
 
-        it_time = round(time.time() - start_spark_execution, 2)
-        log(
-            f"[bold orange3]It: {counter}, converged: {n_e - non_converged} / {n_e}, time {it_time} s [/bold orange3] "
-        )
-
-        flag = not (non_converged == 0)
-        if non_converged < args.gamma:
-            flag = False
+        while flag:
+            # -- PHASE 2.1: Star Graph --
+            rdd_star_graph = MRStarGraphWithPrePartitions.mapReduce(rdd_graph_jaccard)
             
-            updated_edges = CommunityDetection.execute(
-                updated_edges, args.window_size, args.lambda_,  counter
+            # -- PHASE 2.2: Dynamic Interactions --
+            rdd_dynamic_interactions = MRDynamicInteractions.mapReduce(
+                rdd_star_graph,
+                args.num_partitions,
+                args.lambda_,
             )
+
+            # -- PHASE 2.3: Update Edges --
+            rdd_updated_edges = MRUpdateEdges.mapReduce(
+                rdd_dynamic_interactions,
+                args.tau,
+                args.window_size,
+                counter,
+            )
+
+            # Actual execution of the 3 phases of MapReduce
+            start_spark_execution = time.time()
+            updated_edges = rdd_updated_edges.collect()
             
-            break
+            reassing_partitions = []
+            for (key, data) in updated_edges:
+                center, target = key.split("-")
+                center, target = int(center), int(target)
+                new_data = (*data, tuple(partitions.get(center)), tuple(partitions.get(target))) 
+                reassing_partitions.append((key, new_data))
 
-        if not flag:
-            toc_main = time.time()
-            print("Total time main:", round(toc_main - tic_main, 3), "s")
+            non_converged = NoConverged.reduce_edges(updated_edges)
+            rdd_graph_jaccard = sc.parallelize(reassing_partitions)
 
-        counter += 1
+            it_time = round(time.time() - start_spark_execution, 2)
+            log(
+                f"[bold orange3]It: {counter}, converged: {n_e - non_converged} / {n_e}, time {it_time} s [/bold orange3] "
+            )
+
+            flag = not (non_converged == 0)
+            if non_converged < args.gamma:
+                flag = False
+                break
+
+            counter += 1
+
+    if args.single_machine:
+        graph_jaccard: List[Tuple[str, Tuple[int, float, List[float], int, int]]] = rdd_graph_jaccard.collect()
+        updated_edges = CommunityDetection.execute(
+            graph_jaccard, args.window_size, args.lambda_, counter
+        )
+    elif non_converged < args.gamma:
+        updated_edges = CommunityDetection.execute(
+            updated_edges, args.window_size, args.lambda_, counter
+        )
 
     log(f"Main time: [bold orange3] {round(time.time() - tic_main, 2)} [/bold orange3]")
-    communities = connected_components(updated_edges, n_v)
+    communities = NoConverged.connected_components(updated_edges, n_v)
 
     # Save communities to file
-    save_communities(communities, args.output_folder, n_v)
+    NoConverged.save_communities(communities, args.output_folder, n_v)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,4 @@
-from typing import Dict, Tuple
-from attractor.DataframeSchemaProvider import DataframeSchemaProvider
+from typing import Dict
 from libs.Vertex import Vertex
 from libs.Edge import Edge
 from pyspark.sql.dataframe import DataFrame
@@ -89,7 +88,7 @@ class Graph:
         vertex_end = int(vertices[1])
         return vertex_start, vertex_end
     
-    def get_graph_jaccard_dataframe(self, spark: SparkSession, partitioned = None) -> DataFrame:
+    def get_graph_jaccard_rdd(self, spark: SparkSession, window_size, partitioned = None) -> DataFrame:
         edges_data = []
         edges = self.get_all_edges()
         vertices_degree = self.get_degree_dict()
@@ -105,7 +104,7 @@ class Graph:
                 partitions_center = tuple(partitioned.get(vertex_start))
                 partitions_target = tuple(partitioned.get(vertex_end))
             
-            edges_data.append((f"{vertex_start}-{vertex_end}", [vertex_end, edge_value.weight, [], degree_start, degree_end, partitions_center, partitions_target]))
+            edges_data.append((f"{vertex_start}-{vertex_end}", [vertex_end, edge_value.weight, [0] * window_size, degree_start, degree_end, partitions_center, partitions_target]))
         
         return spark.sparkContext.parallelize(edges_data)
     
