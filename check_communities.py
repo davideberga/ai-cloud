@@ -1,0 +1,95 @@
+import numpy as np
+import sys
+
+def load_npz_communities(npz_path):
+    # Load the community structure from a .npz file
+    data = np.load(npz_path, allow_pickle=True)
+    if 'communities' not in data:
+        raise KeyError("There is no 'communities' key in the .npz file")
+
+    node_to_comm = data['communities'].item()
+    comm_to_nodes = {}
+    for node, comm in node_to_comm.items():
+        comm = int(comm)
+        node = int(node)
+        comm_to_nodes.setdefault(comm, set()).add(node)
+    return comm_to_nodes
+
+
+def load_ground_truth(txt_path):
+    # Load the ground truth community structure from a .txt file
+    comm_to_nodes = {}
+    with open(txt_path, 'r') as f:
+        for line in f:
+            parts = line.strip().split()
+            if len(parts) < 2:
+                continue
+            comm_id = int(parts[0])
+            nodes = set(map(int, parts[1:]))
+            comm_to_nodes[comm_id] = nodes
+    return comm_to_nodes
+
+
+def compare_communities_sets(predicted, ground_truth):
+    # Two metrics:
+    # 1. Exact match: identical set (same length and same nodes)
+    # 2. Inclusion: the GT set is contained in at least one predicted set
+    
+    predicted_fsets = {frozenset(nodes) for nodes in predicted.values()}
+    predicted_sets = list(predicted.values())  # for inclusion
+
+    exact_correct = 0
+    inclusion_correct = 0
+    total = len(ground_truth)
+    wrong_exact = []
+    wrong_inclusion = []
+
+    for gt_comm_id, gt_nodes in ground_truth.items():
+        f_gt_nodes = frozenset(gt_nodes)
+
+        # 1. Exact match 
+        if f_gt_nodes in predicted_fsets:
+            exact_correct += 1
+        else:
+            wrong_exact.append(gt_comm_id)
+
+        # 2. Inclusion
+        if any(gt_nodes.issubset(pred_set) for pred_set in predicted_sets):
+            inclusion_correct += 1
+        else:
+            wrong_inclusion.append(gt_comm_id)
+
+    exact_accuracy = exact_correct / total * 100 if total else 0
+    inclusion_accuracy = inclusion_correct / total * 100 if total else 0
+
+    return (exact_correct, exact_accuracy, wrong_exact), (inclusion_correct, inclusion_accuracy, wrong_inclusion), total
+
+
+if __name__ == "__main__":
+    
+    if len(sys.argv) != 3:
+        print("Usage: python check_communities.py <file.npz> <top5000_remapped.txt>")
+        sys.exit(1)
+
+    npz_file = sys.argv[1]
+    txt_file = sys.argv[2]
+
+    predicted_comms = load_npz_communities(npz_file)
+    ground_truth_comms = load_ground_truth(txt_file)
+
+    (exact_correct, exact_accuracy, wrong_exact), (inclusion_correct, inclusion_accuracy, wrong_inclusion), total = compare_communities_sets(predicted_comms, ground_truth_comms)
+
+    print(f"Total communities compared: {total}")
+    print("\n--- Exact Match ---")
+    print(f"Correct communities: {exact_correct}")
+    print(f"Wrong communities: {total - exact_correct}")
+    print(f"Accuracy: {exact_accuracy:.2f}%")
+    # if wrong_exact:
+    #     print(f"Wrong IDs in exact match: {', '.join(map(str, wrong_exact))}")
+
+    print("\n--- Inclusion ---")
+    print(f"Correct communities: {inclusion_correct}")
+    print(f"Wrong communities: {total - inclusion_correct}")
+    print(f"Accuracy: {inclusion_accuracy:.2f}%")
+    # if wrong_inclusion:
+    #     print(f"Wrong IDs in inclusion: {', '.join(map(str, wrong_inclusion))}")

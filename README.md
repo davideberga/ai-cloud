@@ -145,3 +145,8 @@ python main.py \
 --gamma 5000 \
 --num-partitions 5 \
 --single-machine True
+
+- To run check_communities.py you should provide it arguments in following format: 
+``` 
+python check_communities.py MrAttractor/details.npz testgraphs/top5000remapped.txt>
+``` 

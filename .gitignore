@@ -17,7 +17,5 @@ artifacts/
 .venv/
 testgraphs/
 libs/read_npArray.py
-
-
-graph_jaccard_initilized
+graph_jaccard_initialized
 graph_degrees

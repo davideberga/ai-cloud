@@ -47,13 +47,13 @@ class NoConverged:
 
         return comms
 
-    # def save_communities(communities, output_folder, num_vertices):
-    #     if not os.path.exists(output_folder):
-    #         os.makedirs(output_folder)
+    def save_communities(communities, output_folder, num_vertices):
+        if not os.path.exists(output_folder):
+            os.makedirs(output_folder)
 
-    #     with open(f"{output_folder}/communities.txt", "w") as f:
-    #         for i in range(num_vertices):
-    #             f.write(f"{i + 1} {communities[i]}\n")
+        with open(f"{output_folder}/communities.txt", "w") as f:
+            for i in range(num_vertices):
+                f.write(f"{i + 1} {communities[i]}\n")
 
     @staticmethod
     def reduce_edges(output_update_edges,):

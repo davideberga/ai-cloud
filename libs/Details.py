@@ -1,6 +1,6 @@
 import numpy as np
 import os
-from datetime import datetime
+import time
 
 class Details:
 
@@ -31,4 +31,4 @@ class Details:
 
     @staticmethod
     def current_timestamp():
-        return datetime.now().strftime("%H:%M:%S")
+        return time.time()

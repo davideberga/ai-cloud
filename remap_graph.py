@@ -1,7 +1,11 @@
 # Script that remaps the node ids in a graph file starting from 1
+import json
+import os
+import sys
 
-def remap_graph_id(file_path):
-    with open(file_path, 'r') as f:
+def remap_graph_id(graph_file, community_file=None):
+    # Remap the graph
+    with open(graph_file, 'r') as f:
         lines = f.readlines()
 
     header_lines = []
@@ -10,9 +14,9 @@ def remap_graph_id(file_path):
     for line in lines:
         if line.startswith('#'):
             header_lines.append(line)
-        elif line.strip():  # Evita righe vuote
+        elif line.strip():  
             edge_lines.append(line.strip())
- 
+
     node_ids = set()
     for line in edge_lines:
         u, v = map(int, line.split())
@@ -22,23 +26,42 @@ def remap_graph_id(file_path):
     # Mapping: Original node -> new sequential id (starting from 1)
     id_mapping = {old_id: new_id for new_id, old_id in enumerate(sorted(node_ids), start=1)}
 
-    # Add new remmapped edges
+    # Remap edges in the graph
     remapped_edges = []
     for line in edge_lines:
         u, v = map(int, line.split())
-        new_u = id_mapping[u]
-        new_v = id_mapping[v]
-        remapped_edges.append(f"{new_u}\t{new_v}\n")
+        remapped_edges.append(f"{id_mapping[u]}\t{id_mapping[v]}\n")
 
-    # Rewriting the file with remapped edges
-    with open(file_path, 'w') as f:
+    with open(graph_file, 'w') as f:
         f.writelines(header_lines)
         f.write("# FromNodeId\tToNodeId\n")
         f.writelines(remapped_edges)
+    print(f"Graph remapped saved in {graph_file}")
+
+    # Remap communities if provided (top5000)
+    if community_file:
+        with open(community_file, 'r') as f:
+            lines = [line.strip() for line in f if line.strip()]
+
+        remapped_lines = []
+        for community_id, line in enumerate(lines, start=1):
+            original_ids = map(int, line.split())
+            remapped_ids = [str(id_mapping[node_id]) for node_id in original_ids]
+            remapped_line = f"{community_id}\t" + "\t".join(remapped_ids)
+            remapped_lines.append(remapped_line)
+
+        with open(community_file, 'w') as f:
+            f.write("\n".join(remapped_lines))
+
+        print(f"Communities remapped")
+
 
 if __name__ == "__main__":
-    import sys
-    if len(sys.argv) != 2:
-        print("Use: python remap_graph.py <file_path>")
-    else:
-        remap_graph_id(sys.argv[1])
+    if len(sys.argv) < 2 or len(sys.argv) > 3:
+        print("Usage: python remap_graph.py <graph_file> [community_file (top5000)]")
+        sys.exit(1)
+
+    graph_path = sys.argv[1]
+    community_path = sys.argv[2] if len(sys.argv) == 3 else None
+
+    remap_graph_id(graph_path, community_path)

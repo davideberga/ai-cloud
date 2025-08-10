@@ -136,7 +136,7 @@ def main(args, spark, sc):
     communities = NoConverged.connected_components(updated_edges, n_v, details)
 
     # Save communities to file
-    #NoConverged.save_communities(communities, args.output_folder, n_v)
+    NoConverged.save_communities(communities, args.output_folder, n_v)
     details.save()
 
 if __name__ == "__main__":
