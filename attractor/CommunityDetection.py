@@ -6,12 +6,10 @@ from libs.Graph import Graph
 from attractor.GraphUtils import GraphUtils
 from pyspark.sql.types import Row
 from rich import print
-from datetime import datetime
 from libs.Details import Details
 
 def log(message: str):
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        print(f"[MRAttractor_sm] {message}, {timestamp}")
+        print(f"[MRAttractor_SM] {message}")
 
 class CommunityDetection:
     
@@ -125,7 +123,8 @@ class CommunityDetection:
         dictVirtEdges = dict()
 
         b_continue = True
-        
+
+        start_it = time.time()
         while b_continue:
             b_continue = False
 
@@ -178,7 +177,7 @@ class CommunityDetection:
                     graph.add_vertex_weight(v_end, new_distance, next_step)
                     edges_converged_number += 1
 
-            log(f"[bold orange3]It_sm: {loop_counter} [/bold orange3]")
+            log(f"[bold orange3]It_sm: {loop_counter}, time {round(time.time() - start_it, 2)} s [/bold orange3]")
             details.sm_timestamp.append(Details.current_timestamp())
 
 
