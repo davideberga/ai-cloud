@@ -88,7 +88,7 @@ class Graph:
         vertex_end = int(vertices[1])
         return vertex_start, vertex_end
     
-    def get_graph_jaccard_rdd(self, spark: SparkSession, window_size, partitioned = None) -> DataFrame:
+    def get_graph_jaccard_rdd(self, spark: SparkSession, window_size, details, partitioned = None) -> DataFrame:
         edges_data = []
         edges = self.get_all_edges()
         vertices_degree = self.get_degree_dict()
@@ -97,7 +97,13 @@ class Graph:
             vertex_start, vertex_end = Graph.from_key_to_vertex(edge_key)
             degree_start = vertices_degree.get(vertex_start)
             degree_end = vertices_degree.get(vertex_end)
-            
+
+            if vertex_start not in details.degree:
+                details.degree[vertex_start] = degree_start
+
+            if vertex_end not in details.degree:
+                details.degree[vertex_end] = degree_end
+      
             partitions_center = []
             partitions_target = []
             if partitioned is not None:

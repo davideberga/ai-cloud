@@ -13,6 +13,7 @@ class Details:
         self.sm_timestamp = []
         self.n_community = 0
         self.communities = {}
+        self.degree = {}
 
     def save(self):
         np.savez(
@@ -23,6 +24,7 @@ class Details:
             sm_timestamp=np.array(self.sm_timestamp),
             n_community=np.array(self.n_community),
             communities=np.array(self.communities, dtype=object),
+            degree=np.array(self.degree, dtype=object),
         )
 
     @staticmethod

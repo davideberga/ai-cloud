@@ -46,7 +46,7 @@ def main(args, spark, sc):
     n_v, n_e = graph_with_jaccard.get_num_vertex(), graph_with_jaccard.get_num_edges()
 
     log(f"[green]Loaded {args.graph_file}, |V|: {n_v}, |E|: {n_e} [/green]")
-    rdd_graph_jaccard = graph_with_jaccard.get_graph_jaccard_rdd(spark, args.window_size)
+    rdd_graph_jaccard = graph_with_jaccard.get_graph_jaccard_rdd(spark, args.window_size, details)
     log(f"Jaccard distance init in {round(time.time() - start_jaccard, 2)} s")
 
     rdd_graph_jaccard.collect()  
