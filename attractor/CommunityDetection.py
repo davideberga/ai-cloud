@@ -124,8 +124,9 @@ class CommunityDetection:
 
         b_continue = True
 
-        start_it = time.time()
+        
         while b_continue:
+            start_it = time.time()
             b_continue = False
 
             next_step = CommunityDetection.compute_next_step(current_step)

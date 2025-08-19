@@ -55,7 +55,7 @@ def main(args, spark, sc):
     tic_main = time.time()
     counter = 0
     
-    if args.single_machine == False:  
+    if not args.single_machine:  
 
         # -- Compute Partitions --
         start_partition = time.time()
@@ -70,6 +70,7 @@ def main(args, spark, sc):
         del graph_with_jaccard
         gc.collect()
         
+        details.partitions_computed = Details.current_timestamp()
         log(f"Partitions computed in {round(time.time() - start_partition, 3)} s")
 
         while flag:

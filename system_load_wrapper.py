@@ -121,10 +121,10 @@ def launch_and_monitor(cmd, output_path):
                 workers_mem,
                 workers_cpu,
             )
-            monitor_print(
-                f"Main mem: {main_python_mem / (1024 * 1024):.2f} MB | Main CPU: {main_python_cpu:.2f} %, Java mem: {java_mem / (1024 * 1024):.2f} MB | Java CPU: {java_cpu:.2f} %, , Workers mem: {workers_mem / (1024 * 1024):.2f} MB | Workers CPU: {workers_cpu:.2f} %"
-            )
-            time.sleep(0.5)
+            # monitor_print(
+            #     f"Main mem: {main_python_mem / (1024 * 1024):.2f} MB | Main CPU: {main_python_cpu:.2f} %, Java mem: {java_mem / (1024 * 1024):.2f} MB | Java CPU: {java_cpu:.2f} %, , Workers mem: {workers_mem / (1024 * 1024):.2f} MB | Workers CPU: {workers_cpu:.2f} %"
+            # )
+            time.sleep(0.3)
     except KeyboardInterrupt:
         monitor_print("Stopping monitor...")
         process.terminate()
@@ -140,8 +140,9 @@ if __name__ == "__main__":
 
     # Build the output path for this experiment
     args.o = os.path.join(
-        args.o, f"{dataset_name}_l{args.l}_w{args.w}_g{args.G}_p{args.p}"
+        args.o, f"{dataset_name}_l{args.l}_w{args.w}_g{args.G}_p{args.p}_sm{args.sm}"
     )
+    print( args.o)
     command = [sys.executable, "main.py"]
     command.extend(stringify_args(args))
     launch_and_monitor(command, args.o)
