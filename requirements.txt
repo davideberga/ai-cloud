@@ -1,9 +1,11 @@
 bitarray==3.5.0
 choreographer==1.0.9
+joblib==1.5.1
 kaleido==1.0.0
 logistro==1.1.0
 markdown-it-py==3.0.0
 mdurl==0.1.2
+mdutils==1.8.0
 narwhals==2.1.0
 numpy==2.3.1
 orjson==3.11.1
@@ -17,6 +19,9 @@ pyspark==4.0.0
 python-dateutil==2.9.0.post0
 pytz==2025.2
 rich==14.1.0
+scikit-learn==1.7.1
+scipy==1.16.1
 simplejson==3.20.1
 six==1.17.0
+threadpoolctl==3.6.0
 tzdata==2025.2

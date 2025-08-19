@@ -5,6 +5,15 @@ import os
 import argparse
 import re
 from rich import print
+from mdutils import MdUtils
+
+from check_communities import (
+    average_degree,
+    compare_communities_sets,
+    compute_nmi_ari,
+    compute_purity,
+    load_ground_truth,
+)
 
 
 def parse_folder_name(folder_name: str):
@@ -193,7 +202,7 @@ def plot_running_time_total_first(datasets, data, output_path):
         "gamma = 5000": "_l0.5_w20_g5000_p8_smFalse",
         "Single process only": "_l0.5_w20_g5000_p8_smTrue",
     }
-    
+
     folder_of_first_template = {
         "MR": "_l0.5_w20_g0_p8_smFalse",
         "Single process": "_l0.5_w20_g5000_p8_smTrue",
@@ -234,8 +243,6 @@ def plot_running_time_total_first(datasets, data, output_path):
         yaxis_title="Running Time (minutes)",
     )
 
-    print(values)
-
     # First iteration bar chart
     fig_first = go.Figure()
     for label, values in first_iterations.items():
@@ -263,6 +270,54 @@ def plot_running_time_total_first(datasets, data, output_path):
         width=1200,
         height=800,
     )
+
+
+def compute_metrics(data_to_analyze, output_path):
+    table = ["Test", "Running time (m)", "Mean mem (GB)", "Mean cpu (%)"]
+    cols = len(table)
+    rows = 1
+
+    for label, data in data_to_analyze.items():
+        args = parse_folder_name(label)
+
+        title_final = "single process" if args["sm"] else f"MR gamma={args['g']}"
+        title = f"{str(args['dataset']).capitalize()}, {title_final} l={args['l']}"
+
+        resources = data["resources"]
+        output = data["output"]
+
+        # predicted_comms, degree = output['communities'], output['degree']
+        # ground_truth_comms = load_ground_truth(f"testgraphs/{args['dataset']}_top5000.txt")
+
+        # (exact_correct, exact_accuracy, wrong_exact), (inclusion_correct, inclusion_accuracy, wrong_inclusion), total = compare_communities_sets(predicted_comms, ground_truth_comms)
+
+        # purity_score = compute_purity(predicted_comms, ground_truth_comms)
+        # nmi, ari = compute_nmi_ari(predicted_comms, ground_truth_comms)
+        # avg_degree = average_degree(degree)
+
+        main_time = int(
+            (output["main_end_timestamp"] - output["main_start_timestamp"]) / 60.0
+        )
+        main_python_mem = resources["main_python_mem"]
+        main_python_cpu = resources["main_python_cpu"]
+        java_mem = resources["java_mem"]
+        java_cpu = resources["java_cpu"]
+        workers_mem = resources["workers_mem"]
+        workers_cpu = resources["workers_cpu"]
+
+        mean_mem = np.round(
+            np.mean(np.array(main_python_mem + java_mem + workers_mem) / (1024**3)), 2
+        )
+        mean_cpu = np.round(
+            np.mean(np.array(main_python_cpu + java_cpu + workers_cpu)), 2
+        )
+
+        table.extend([title, main_time, mean_mem, mean_cpu])
+        rows += 1
+
+    mdFile = MdUtils(file_name=os.path.join(output_path, "metrics.md"))
+    mdFile.new_table(columns=cols, rows=rows, text=table, text_align="center")
+    mdFile.create_md_file()
 
 
 if __name__ == "__main__":
@@ -293,3 +348,4 @@ if __name__ == "__main__":
 
     datasets = ["amazon", "dblp"]
     plot_running_time_total_first(datasets, data_to_analyze, args.f)
+    compute_metrics(data_to_analyze, args.f)
