@@ -7,7 +7,7 @@ __pycache__/
 venv/
 .env/
 MrAttractor/
-*.txt
+
 *.log
 !requirements.txt
 ours/
@@ -15,7 +15,7 @@ temp_degfile/
 temp_binary_file/
 artifacts/
 .venv/
-testgraphs/
+testgraphs/*.txt
 libs/read_npArray.py
 graph_jaccard_initialized
 graph_degrees

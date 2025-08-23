@@ -19,6 +19,18 @@ def load_npz_communities(npz_path):
 
     return comm_to_nodes, degree
 
+def load_communities(communities, degree):
+    node_to_comm = communities.item()
+    comm_to_nodes = {}
+    for node, comm in node_to_comm.items():
+        comm = int(comm)
+        node = int(node)
+        comm_to_nodes.setdefault(comm, set()).add(node)
+        
+    degree = degree.item()
+
+    return comm_to_nodes, degree
+
 def load_ground_truth(txt_path):
     comm_to_nodes = {}
     with open(txt_path, 'r') as f:
