@@ -51,6 +51,7 @@ def plot_resources_total(details, resources, output_path):
     # Timestamps
     timestamps = (resources["timestamp"] - resources["timestamp"][0]) / 60.0
     start_main = (details["main_start_timestamp"] - resources["timestamp"][0]) / 60.0
+    computed_partitions = (details["partitions_computed"] - resources["timestamp"][0]) / 60.0
     mr_iterations = (details["update_edges_timestamp"] - resources["timestamp"][0]) / 60
     sm_iterations = (details["sm_timestamp"] - resources["timestamp"][0]) / 60
 
@@ -67,7 +68,6 @@ def plot_resources_total(details, resources, output_path):
     cpu_smooth = moving_average(cpu_raw, window_size=5)
     timestamps_smooth = timestamps[len(timestamps) - len(cpu_smooth) :]
 
-    # =============== MEMORY PLOT ===============
     fig_mem = go.Figure()
 
     fig_mem.add_trace(
@@ -80,11 +80,12 @@ def plot_resources_total(details, resources, output_path):
             line=dict(color="rgba(214, 39, 40, 1)", width=1),
         )
     )
+    fig_mem.add_vrect(x0=0, x1=computed_partitions, fillcolor="rgba(226, 153, 75, 0.2)", line_width=0)
 
     # Highlight MR iterations
     end = 0
     for i in range(len(mr_iterations)):
-        start = mr_iterations[i - 1] if i > 0 else start_main
+        start = mr_iterations[i - 1] if i > 0 else computed_partitions
         end = mr_iterations[i]
         fill_opacity = 0.07 if i % 2 == 0 else 0.03
         fillcolor = f"rgba(255, 0, 0, {fill_opacity})"
@@ -128,11 +129,13 @@ def plot_resources_total(details, resources, output_path):
             line=dict(color="rgba(31, 119, 180, 1)", width=1),
         )
     )
+    
+    fig_cpu.add_vrect(x0=0, x1=computed_partitions, fillcolor="rgba(226, 153, 75, 0.2)", line_width=0)
 
     # Highlight MR iterations
     end = 0
     for i in range(len(mr_iterations)):
-        start = mr_iterations[i - 1] if i > 0 else start_main
+        start = mr_iterations[i - 1] if i > 0 else computed_partitions
         end = mr_iterations[i]
         fill_opacity = 0.07 if i % 2 == 0 else 0.03
         fillcolor = f"rgba(255, 0, 0, {fill_opacity})"
@@ -286,7 +289,7 @@ def plot_running_time_total_first(datasets, data, output_path):
 
 
 def compute_metrics(data_to_analyze, output_path):
-    table = ["Test", "Running time (m)", "Mean mem (GB)", "Mean cpu (%)", "Accuracy", "Purity", "NMI", "ARI", "Avg Degree"]
+    table = ["Test", "Running time (m)", "Mean mem (GB)", "Mean cpu (%)", "Predicted", "Accuracy", "Purity", "NMI", "ARI", "Avg Degree"]
     cols = len(table)
     rows = 1
 
@@ -301,6 +304,7 @@ def compute_metrics(data_to_analyze, output_path):
 
         predicted_comms, degree = load_communities(output['communities'], output['degree'])
         ground_truth_comms = load_ground_truth(f"testgraphs/{args['dataset']}_top5000.txt")
+    
 
         (exact_correct, exact_accuracy, wrong_exact), (inclusion_correct, inclusion_accuracy, wrong_inclusion), total = compare_communities_sets(predicted_comms, ground_truth_comms)
 
@@ -325,7 +329,7 @@ def compute_metrics(data_to_analyze, output_path):
             np.mean(np.array(main_python_cpu + java_cpu + workers_cpu)), 2
         )
 
-        table.extend([title, main_time, mean_mem, mean_cpu, inclusion_accuracy, round(purity_score, 4), round(nmi, 4), round(ari, 4), round(avg_degree, 4)])
+        table.extend([title, main_time, mean_mem, mean_cpu, len(predicted_comms), inclusion_accuracy, round(purity_score, 4), round(nmi, 4), round(ari, 4), round(avg_degree, 4)])
         rows += 1
 
     mdFile = MdUtils(file_name=os.path.join(output_path, "metrics.md"))
