@@ -77,4 +77,4 @@ $ python main.py  \
   ``` 
   python check_communities.py <output_folder>/details.npz testgraphs/<dataset>_top5000.txt>
   ``` 
-- `system_load_wrapper.py`: wrapper that launch the `main.py`, observing and recording memory and cpu usage of it and its child processes. Accept the same arguments of `main.py`, but in abbreviate form.
+- `system_load_wrapper.py`: wrapper that launch the `main.py`, observing and recording memory and cpu usage of it and its child processes. Accept the same arguments of `main.py`, but in abbreviate form (--help for usage).
