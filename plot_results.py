@@ -297,7 +297,7 @@ def compute_metrics(data_to_analyze, output_path):
         args = parse_folder_name(label)
 
         title_final = "single process" if args["sm"] else f"MR gamma={args['g']}"
-        title = f"{str(args['dataset']).capitalize()}, {title_final} l={args['l']}"
+        title = f"{str(args['dataset']).capitalize()}, {title_final} l={args['l']}, p={args['p']}"
 
         resources = data["resources"]
         output = data["output"]
