@@ -40,10 +40,8 @@ def parse_folder_name(folder_name: str):
         "sm": groups["sm"] == "True",
     }
 
-
 def moving_average(data, window_size=5):
     return np.convolve(data, np.ones(window_size) / window_size, mode="valid")
-
 
 def plot_resources_total(details, resources, output_path):
     args = parse_folder_name(os.path.basename(output_path))
@@ -167,17 +165,16 @@ def plot_resources_total(details, resources, output_path):
         height=800,
     )
 
-
 def plot_running_time_total_first(datasets, data, output_path):
     folder_of_int_template = {
-        "MR only": "_l0.5_w15_g0_p8_smFalse",
-        "gamma = 5000": "_l0.5_w15_g5000_p8_smFalse",
-        "Single process only": "_l0.5_w15_g5000_p8_smTrue",
+        "MR only": "_l0.5_w15_g0_p4_smFalse",
+        "gamma = 5000": "_l0.5_w15_g5000_p4_smFalse",
+        "Single process only": "_l0.5_w15_g5000_p4_smTrue",
     }
 
     folder_of_first_template = {
-        "MR": "_l0.5_w15_g0_p8_smFalse",
-        "Single process": "_l0.5_w15_g5000_p8_smTrue",
+        "MR": "_l0.5_w15_g0_p4_smFalse",
+        "Single process": "_l0.5_w15_g5000_p4_smTrue",
     }
 
     running_times = {label: [] for label in folder_of_int_template.keys()}
@@ -329,7 +326,7 @@ def compute_metrics(data_to_analyze, output_path):
             np.mean(np.array(main_python_cpu + java_cpu + workers_cpu)), 2
         )
 
-        table.extend([title, main_time, mean_mem, mean_cpu, len(predicted_comms), inclusion_accuracy, round(purity_score, 4), round(nmi, 4), round(ari, 4), round(avg_degree, 4)])
+        table.extend([title, main_time, mean_mem, mean_cpu, len(predicted_comms), exact_accuracy, round(purity_score, 4), round(nmi, 4), round(ari, 4), round(avg_degree, 4)])
         rows += 1
 
     mdFile = MdUtils(file_name=os.path.join(output_path, "metrics.md"))
